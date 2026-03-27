@@ -2,6 +2,7 @@ import { useState, useMemo, useRef } from 'react';
 import { Search, Eye, TrendingUp, AlertTriangle, X, Phone, MapPin, Clock, Zap, DollarSign, Activity } from 'lucide-react';
 import { useEffect } from 'react';
 import { formatPhoneNumber, formatCurrency, getInitials } from '../utils/formatters';
+import { workerAPI } from '../api/workers';
 /*
 const [selectedWorker, setSelectedWorker] = useState(null);
 const [isPopupOpen, setIsPopupOpen] = useState(false);
@@ -42,10 +43,9 @@ const [isModalOpen, setIsModalOpen] = useState(false);
   const fetchWorkers = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`http://localhost:2000/api/workers`);
-      const data = await res.json();
+      const response = await workerAPI.getAll();
 
-      const formatted = data.data.map((w) => ({
+      const formatted = response.data.map((w) => ({
         id: w.id,
         name: w.name,
         phone: w.phone,
@@ -115,11 +115,6 @@ const [isModalOpen, setIsModalOpen] = useState(false);
 
   const start = (currentPage - 1) * ITEMS_PER_PAGE + 1;
   const end = Math.min(currentPage * ITEMS_PER_PAGE, filteredWorkers.length);
-
-  const handleWorkerClick = (worker) => {
-    setSelectedWorker(worker);
-    setIsDrawerOpen(true);
-  };
 
   // ✅ LOADING (AFTER ALL HOOKS)
   if (loading) {
@@ -297,7 +292,7 @@ const [isModalOpen, setIsModalOpen] = useState(false);
         <div className="bg-white dark:bg-gigkavach-surface rounded-lg border border-gray-200 dark:border-gray-700 p-6 shadow-sm">
           <p className="text-gray-600 dark:text-gray-400 text-sm mb-2">Average Coverage</p>
           <p className="text-3xl font-bold text-gigkavach-orange">
-            {(workers.reduce((sum, w) => sum + w.coverage, 0) / workers.length).toFixed(0)}%
+            {workers.length === 0 ? '0%' : (workers.reduce((sum, w) => sum + w.coverage, 0) / workers.length).toFixed(0) + '%'}
           </p>
         </div>
       </div>
@@ -321,13 +316,16 @@ const WorkerModal = ({ workerId, isOpen, onClose }) => {
 
   // Fetch worker details when modal opens
   useEffect(() => {
-    if (!workerId || !isOpen) return;
+    if (!workerId || !isOpen) {
+      setWorkerData(null);
+      return;
+    }
 
     setLoading(true);
+    setWorkerData(null); // Clear previous worker data
     const fetchWorker = async () => {
       try {
-        const res = await fetch(`http://localhost:2000/api/worker/${workerId}`);
-        const data = await res.json();
+        const data = await workerAPI.getById(workerId);
         console.log('API Response:', data); // Debug log
 
         const formatPlan = (plan) => {

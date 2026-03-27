@@ -23,7 +23,7 @@ export const validators = {
    * Validate DCI value (0-100)
    */
   dciValue: (value) => {
-    const num = parseInt(value);
+    const num = parseInt(value, 10);
     return !isNaN(num) && num >= 0 && num <= 100;
   },
 
@@ -31,7 +31,7 @@ export const validators = {
    * Validate coverage percentage (0-100)
    */
   coveragePercentage: (value) => {
-    const num = parseInt(value);
+    const num = parseInt(value, 10);
     return !isNaN(num) && num >= 0 && num <= 100;
   },
 

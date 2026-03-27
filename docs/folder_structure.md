@@ -506,16 +506,16 @@ python scripts/seed_database.py
 
 # 4. Run backend
 cd backend
-uvicorn main:app --reload --port 8000
+uvicorn main:app --reload --port 3000
 
 # 5. Run frontend (new terminal)
 cd frontend
 npm run dev
 
 # 6. Access
-# Backend: http://localhost:8000
+# Backend: http://localhost:3000
 # Frontend: http://localhost:5173
-# API Docs: http://localhost:8000/docs
+# API Docs: http://localhost:3000/docs
 ```
 
 ---
