@@ -158,6 +158,8 @@ app.add_middleware(
 app.include_router(health_router)
 app.include_router(workers_router)   # POST /api/v1/register — Sumukh
 app.include_router(policies_router)  # GET + PATCH /api/v1/policy/{id} — Sumukh
+app.include_router(worker_list_router)   # GET /api/workers — teammate compatibility
+app.include_router(worker_detail_router) # GET /api/worker/{worker_id} — teammate compatibility
 
 # TODO: Uncomment as each route module is built:
 app.include_router(dci_router, prefix="/api/v1")        # Varshit — DCI engine endpoints

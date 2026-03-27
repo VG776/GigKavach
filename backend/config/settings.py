@@ -11,6 +11,11 @@ Usage anywhere in the codebase:
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
+from pathlib import Path
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+ENV_FILE_PATH = PROJECT_ROOT / ".env"
 
 
 class Settings(BaseSettings):
@@ -21,7 +26,7 @@ class Settings(BaseSettings):
 
     # ── Model config: tells Pydantic to read from .env file ──────────
     model_config = SettingsConfigDict(
-        env_file=".env",           # Load from .env in the project root
+        env_file=str(ENV_FILE_PATH),  # Load from project-root .env reliably
         env_file_encoding="utf-8",
         case_sensitive=True,       # env var names are case-sensitive
         extra="ignore",            # Silently ignore unknown env vars
