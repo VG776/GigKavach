@@ -1,31 +1,30 @@
 from fastapi import APIRouter, HTTPException
-
 from utils.db import get_supabase
 
-router = APIRouter(prefix="/api/worker", tags=["Workers"])
+router = APIRouter(prefix="/api/workers", tags=["Workers"])
 
 
 @router.get("/{worker_id}")
 def get_worker_detail(worker_id: str):
     try:
-        sb = get_supabase()
+        sb = get_supabase()  # ✅ use your util function
 
+        # 1️⃣ Worker profile
         worker_response = (
             sb.table("workers")
             .select(
-                "id, name, phone, phone_number, pin_codes, shift, shift_start, shift_end, language, plan, coverage_pct, last_seen_at, upi_id, is_active"
+                "id, name, phone, pin_codes, shift, shift_start, shift_end, language, plan, coverage_pct, last_seen_at, upi_id, is_active"
             )
             .eq("id", worker_id)
             .execute()
         )
+
         worker = worker_response.data[0] if worker_response.data else None
 
         if not worker:
             raise HTTPException(status_code=404, detail="Worker not found")
 
-        if not worker.get("phone"):
-            worker["phone"] = worker.get("phone_number")
-
+        # 2️⃣ Latest policy
         policy_response = (
             sb.table("policies")
             .select("*")
@@ -34,8 +33,10 @@ def get_worker_detail(worker_id: str):
             .limit(1)
             .execute()
         )
+
         policy = policy_response.data[0] if policy_response.data else None
 
+        # 3️⃣ Last 10 payouts
         payouts_response = (
             sb.table("payouts")
             .select("*")
@@ -44,6 +45,7 @@ def get_worker_detail(worker_id: str):
             .limit(10)
             .execute()
         )
+
         payouts = [
             {
                 "id": p.get("id"),
@@ -57,6 +59,7 @@ def get_worker_detail(worker_id: str):
             for p in payouts_response.data or []
         ]
 
+        # 4️⃣ Last 20 activities
         activities_response = (
             sb.table("activities")
             .select("*")
@@ -65,11 +68,17 @@ def get_worker_detail(worker_id: str):
             .limit(20)
             .execute()
         )
+
         activities = [
-            {"id": a.get("id"), "description": a.get("description"), "date": a.get("date")}
+            {
+                "id": a.get("id"),
+                "description": a.get("description"),
+                "date": a.get("date"),
+            }
             for a in activities_response.data or []
         ]
 
+        # 5️⃣ Last 20 activity logs
         activity_logs_response = (
             sb.table("activity_log")
             .select("*")
@@ -78,6 +87,7 @@ def get_worker_detail(worker_id: str):
             .limit(20)
             .execute()
         )
+
         activity_logs = [
             {
                 "id": al.get("id"),
@@ -93,6 +103,7 @@ def get_worker_detail(worker_id: str):
             for al in activity_logs_response.data or []
         ]
 
+        # 6️⃣ Activity history
         activity_history_response = (
             sb.table("activity_history")
             .select("*")
@@ -100,8 +111,11 @@ def get_worker_detail(worker_id: str):
             .limit(1)
             .execute()
         )
+
         activity_history = (
-            activity_history_response.data[0] if activity_history_response.data else None
+            activity_history_response.data[0]
+            if activity_history_response.data
+            else None
         )
 
         return {
@@ -116,4 +130,5 @@ def get_worker_detail(worker_id: str):
     except HTTPException:
         raise
     except Exception as err:
-        raise HTTPException(status_code=500, detail=f"Internal server error: {err}")
+        print(f"Worker Detail API Error: {err}")
+        raise HTTPException(status_code=500, detail="Internal server error")

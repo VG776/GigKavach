@@ -77,7 +77,9 @@ export const formatPhoneNumber = (phone) => {
  * Format worker name with initials
  */
 export const formatWorkerName = (firstName, lastName) => {
-  return `${firstName} ${lastName}`;
+  const first = firstName || '';
+  const last = lastName || '';
+  return `${first} ${last}`.trim();
 };
 
 /**

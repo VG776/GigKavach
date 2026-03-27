@@ -21,12 +21,22 @@ def get_workers(
         from_index = (page - 1) * limit
         to_index = from_index + limit - 1
 
+        # Whitelist allowed sort columns
+        ALLOWED_SORT_COLUMNS = ["created_at", "name", "is_active", "plan", "coverage_pct"]
+        if sortBy not in ALLOWED_SORT_COLUMNS:
+            sortBy = "created_at"
+
+        # Validate order parameter
+        if order not in ["asc", "desc"]:
+            order = "desc"
+
         query = sb.table("workers").select("*", count="exact")
 
         if search and search.strip():
-            # Support both phone and phone_number columns safely.
-            search_query = f"name.ilike.%{search}%,phone.ilike.%{search}%,phone_number.ilike.%{search}%"
-            query = query.or_(search_query)
+            # Use safer filtering with multiple ilike calls instead of raw string interpolation
+            search_term = search.strip()
+            query = query.ilike("name", f"%{search_term}%")
+            query = query.or_(f"phone.ilike.%{search_term}%,phone_number.ilike.%{search_term}%")
 
         if status and status != "all":
             query = query.eq("is_active", status == "active")
