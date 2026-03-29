@@ -11,7 +11,6 @@ data/
 .DS_Store
 *.log
 *.csv
-*.json
 *.xlsx
 *.zip
 *.tar.gz

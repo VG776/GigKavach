@@ -1,0 +1,83 @@
+{
+  "model_name": "XGBoost Payout Model v3 (Enhanced)",
+  "created_at": "2026-03-28T23:54:46.847054",
+  "data_generation": {
+    "num_records": 5000,
+    "enhancements": [
+      "Monsoon seasonality (June-Sept)",
+      "Time-of-day demand curves (peak/off-peak)",
+      "Day-of-week effects (Mon vs Fri-Sat)",
+      "Zone \u00d7 disruption_type interactions",
+      "Baseline earnings vulnerability tiers"
+    ]
+  },
+  "training": {
+    "train_samples": 4000,
+    "test_samples": 1000,
+    "num_features": 20,
+    "features": [
+      "dci_score",
+      "baseline_earnings",
+      "hour_of_day",
+      "day_of_week",
+      "city_Chennai",
+      "city_Delhi",
+      "city_Mumbai",
+      "zone_density_Low",
+      "zone_density_Mid",
+      "shift_Morning",
+      "shift_Night",
+      "disruption_type_Heatwave",
+      "disruption_type_Rain",
+      "disruption_type_Traffic_Gridlock",
+      "dci_x_disruption_type_Rain",
+      "dci_x_disruption_type_Heatwave",
+      "dci_x_disruption_type_Traffic_Gridlock",
+      "dci_x_shift_Morning",
+      "dci_x_shift_Night",
+      "zone_density_Mid_x_dci"
+    ]
+  },
+  "hyperparameters": {
+    "subsample": 0,
+    "n_estimators": 300,
+    "min_child_weight": 10,
+    "max_depth": 5,
+    "learning_rate": 0,
+    "colsample_bytree": 0
+  },
+  "performance": {
+    "train": {
+      "mae": 0.16916468527853487,
+      "r2": 0.8948651204438559
+    },
+    "test": {
+      "mae": 0.22435012876033783,
+      "rmse": 0.33284448467847527,
+      "r2": 0.8127252439507986
+    },
+    "cv": {
+      "r2_scores": [
+        0.7752164696582848,
+        0.8338566709764242,
+        0.8111889137806371,
+        0.8422709936429499,
+        0.7767482009414627
+      ],
+      "mean_r2": 0.8078562497999517,
+      "std_r2": 0.027944835286040928
+    }
+  },
+  "feature_importance": {
+    "dci_score": 0.14859817922115326,
+    "dci_x_shift_Night": 0.11511947214603424,
+    "shift_Night": 0.0821387842297554,
+    "disruption_type_Heatwave": 0.07281697541475296,
+    "disruption_type_Traffic_Gridlock": 0.07106463611125946,
+    "disruption_type_Rain": 0.060848355293273926,
+    "zone_density_Low": 0.05921175703406334,
+    "dci_x_disruption_type_Traffic_Gridlock": 0.05795940384268761,
+    "day_of_week": 0.057244084775447845,
+    "hour_of_day": 0.05107453465461731
+  }
+}

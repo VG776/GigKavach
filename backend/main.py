@@ -30,6 +30,7 @@ from api.routes.workers import router as workers_router
 from api.routes.policies import router as policies_router
 from api.dci import router as dci_router
 from api.payouts import router as payouts_router
+from api.fraud import router as fraud_router
 
 
 # ─── Logging Setup ────────────────────────────────────────────────────────────
@@ -65,36 +66,21 @@ async def lifespan(app: FastAPI):
     if not settings.TOMORROW_IO_API_KEY:
         logger.warning("⚠️  TOMORROW_IO_API_KEY not set — DCI weather component will use fallbacks")
 
-    # ── Start APScheduler for DCI Engine ─────────────────────────────────────
-    # The DCI engine polls weather/AQI/social APIs every 5 minutes and
-    # updates the DCI score for all active zones.
-    # We import lazily here so this file doesn't crash if DCI engine isn't built yet.
+    # ── Start APScheduler for Background Jobs ────────────────────────────────
+    # Background jobs:
+    # 1. DCI Engine — polls weather/AQI/social APIs every 5 minutes
+    # 2. Claims Pipeline — processes pending claims every 5 minutes
+    # 3. RSS Parser — fetches news articles every 1 hour
+    # 4. DCI Archival — archives historical data daily at 2 AM UTC
+    
     try:
-        from apscheduler.schedulers.asyncio import AsyncIOScheduler
-
-        scheduler = AsyncIOScheduler()
-
-        # (Varshit): Uncommented and wired to cron poller
-        from cron.dci_poller import run_dci_cycle
-        scheduler.add_job(
-            run_dci_cycle,
-            "interval",
-            seconds=settings.DCI_POLL_INTERVAL_SECONDS,
-            id="dci_engine",
-            name="DCI Engine Poll",
-        )
-
-        # ── Placeholder job just to confirm scheduler works ───────────────
-        async def _scheduler_heartbeat():
-            logger.debug("APScheduler heartbeat — DCI engine ready to be wired in")
-
-        scheduler.add_job(_scheduler_heartbeat, "interval", seconds=60, id="heartbeat")
-        scheduler.start()
-        app.state.scheduler = scheduler
-        logger.info(f"APScheduler started | DCI poll every {settings.DCI_POLL_INTERVAL_SECONDS}s")
+        from cron.scheduler import configure_scheduler
+        configure_scheduler()
+        logger.info("✅ Background scheduler started (DCI, Claims, RSS, Archival)")
 
     except Exception as e:
-        logger.error(f"Failed to start APScheduler: {e}")
+        logger.error(f"⚠️  Failed to start scheduler: {e}")
+        logger.warning("Continuing without background jobs...")
 
     logger.info("GigKavach API ready ✅")
 
@@ -102,9 +88,11 @@ async def lifespan(app: FastAPI):
 
     # ── SHUTDOWN ─────────────────────────────────────────────────────────────
     logger.info("GigKavach API shutting down...")
-    if hasattr(app.state, "scheduler"):
-        app.state.scheduler.shutdown(wait=False)
-        logger.info("APScheduler stopped")
+    try:
+        from cron.scheduler import stop_scheduler
+        stop_scheduler()
+    except Exception as e:
+        logger.error(f"Error stopping scheduler: {e}")
 
 
 
@@ -152,20 +140,26 @@ app.add_middleware(
 
 
 # ─── Route Registration ───────────────────────────────────────────────────────
-# Each feature area has its own router in api/routes/.
+# Each feature area has its own router in api/.
 # Add new routers here as teammates build them.
 
 app.include_router(health_router)
 app.include_router(workers_router)   # POST /api/v1/register — Sumukh
 app.include_router(policies_router)  # GET + PATCH /api/v1/policy/{id} — Sumukh
-app.include_router(worker_list_router)   # GET /api/workers — teammate compatibility
-app.include_router(worker_detail_router) # GET /api/worker/{worker_id} — teammate compatibility
+# app.include_router(worker_list_router)   # GET /api/workers — teammate compatibility
+# app.include_router(worker_detail_router) # GET /api/worker/{worker_id} — teammate compatibility
+
+# Fraud Detection (Vijeth)
+app.include_router(fraud_router, prefix="/api/v1")
+
+# DCI Engine (Varshit)
+app.include_router(dci_router, prefix="/api/v1")
+
+# Payouts & SLA (Sumukh)
+app.include_router(payouts_router, prefix="/api/v1")
 
 # TODO: Uncomment as each route module is built:
-app.include_router(dci_router, prefix="/api/v1")        # Varshit — DCI engine endpoints
 # app.include_router(whatsapp_router, prefix="/api/v1")   # Sumukh — Twilio webhook
-app.include_router(payouts_router, prefix="/api/v1")    # Sumukh — payout triggers
-# app.include_router(fraud_router, prefix="/api/v1")      # Vijeth — fraud assessment
 # app.include_router(dashboard_router, prefix="/api/v1")  # V Saatwik — admin metrics
 
 
