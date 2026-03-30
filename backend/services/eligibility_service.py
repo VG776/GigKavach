@@ -59,20 +59,18 @@ def check_eligibility(worker_id: str, dci_event: dict) -> tuple[bool, str]:
         return False, f"COVERAGE_DELAY_LOCK_{settings.COVERAGE_DELAY_HOURS}H"
         
     # RULE 3: Shift Window Alignment
-    worker_shift = policy.get("shift")
-    event_shift = dci_event.get("shift_affected")
-    # If the event targets a specific shift, they must align. 
-    # (If event_shift is "All", bypass)
-    if event_shift and event_shift != "All" and event_shift != worker_shift:
-        return False, f"SHIFT_MISMATCH_EXPECTED_{event_shift}"
+    from utils.datetime_utils import is_within_shift
+    if not is_within_shift(policy["shift"], disruption_time):
+        return False, f"SHIFT_MISMATCH_FOR_{policy['shift']}"
         
     # RULE 4: Recent Platform Activity OR Catastrophic Override
     last_active = datetime.fromisoformat(policy.get("last_active"))
     time_since_active_hours = (disruption_time - last_active).total_seconds() / 3600.0
     
-    # Catastrophic Override (DCI >= 85 covers everyone on shift regardless of login)
+    # NDMA/Catastrophic Override (Bypass activity check)
+    ndma_active = dci_event.get("ndma_override_active", False)
     dci_score = dci_event.get("dci_score", 0)
-    is_catastrophic = dci_score >= settings.DCI_CATASTROPHIC_THRESHOLD
+    is_catastrophic = (dci_score >= settings.DCI_CATASTROPHIC_THRESHOLD) or ndma_active
     
     if not is_catastrophic and time_since_active_hours > 2.0:
         return False, "NO_RECENT_PLATFORM_ACTIVITY"

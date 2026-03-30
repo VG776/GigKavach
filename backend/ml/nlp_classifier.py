@@ -22,13 +22,10 @@ except ImportError:
 _classifier = None
 _ner_pipeline = None
 
-# Labels we actively penalize workers' zones for
-DISRUPTION_LABELS = [
-    "bandh", 
-    "curfew", 
-    "strike", 
-    "protest", 
-    "shutdown"
+# Global Candidate Labels for Zero-Shot Classification
+CANDIDATE_LABELS = [
+    "bandh", "curfew", "strike", "protest", "shutdown", "unrest", "disturbance", # Social
+    "flood", "earthquake", "cyclone", "landslide", "tsunami" # Disaster
 ]
 
 def load_models():
@@ -60,7 +57,7 @@ def extract_location(text: str) -> str:
             
         # Fallback to simple hardcoded regex if NER fails to map local Indian city text
         if not locations:
-            known_zones = ["Bengaluru", "Karnataka", "Koramangala", "Indiranagar", "Mumbai", "Delhi", "Agara"]
+            known_zones = ["Bengaluru", "Karnataka", "Koramangala", "Indiranagar", "HSR Layout", "Marathahalli", "Mumbai", "Delhi", "Agara"]
             for zone in known_zones:
                 if zone.lower() in text.lower():
                     return zone
@@ -82,10 +79,10 @@ def analyze_headline(headline: str) -> dict:
         if not HUGGINGFACE_AVAILABLE:
             # --- MOCK CLASSIFIER FOR LOCAL 3.13 ENVIRONMENTS ---
             headline_lower = headline.lower()
-            is_disrupt = any(word in headline_lower for word in DISRUPTION_LABELS)
+            is_disrupt = any(word in headline_lower for word in CANDIDATE_LABELS)
             mock_score = round(random.uniform(0.75, 0.98), 3) if is_disrupt else round(random.uniform(0.01, 0.20), 3)
             location = extract_location(headline)
-            top_label = next((w for w in DISRUPTION_LABELS if w in headline_lower), "normal")
+            top_label = next((w for w in CANDIDATE_LABELS if w in headline_lower), "normal")
             return {
                 "is_disruption": is_disrupt,
                 "headline": headline,
@@ -95,7 +92,7 @@ def analyze_headline(headline: str) -> dict:
             }
 
         # --- REAL HUGGINGFACE CLASSIFIER ---
-        result = _classifier(headline, DISRUPTION_LABELS)
+        result = _classifier(headline, CANDIDATE_LABELS)
         top_label = result["labels"][0]
         top_score = result["scores"][0]
         

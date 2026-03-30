@@ -50,9 +50,9 @@ def trigger_claims_pipeline(pincode: str, final_dci: int, dci_data: dict):
     Evaluates all workers in the affected zone against the eligibility firewall,
     mock-inserts valid claims to the payouts table, and fires the WhatsApp webhook.
     """
-    # 1. Hardcoded mock list of active workers on shift in this zone right now
-    # We use worker IDs mapping directly back to WORKER_POLICIES_DB in eligibility_service
+    # 1. Mock list of active workers on shift in this zone right now
     active_workers_in_zone = ["W100", "W101", "W102"]
+    from api.whatsapp import send_whatsapp_alert
     
     logger.info(f"[CLAIMS PIPELINE] Evaluating {len(active_workers_in_zone)} workers in zone {pincode} (DCI: {final_dci})")
     
@@ -60,15 +60,17 @@ def trigger_claims_pipeline(pincode: str, final_dci: int, dci_data: dict):
     for worker_id in active_workers_in_zone:
         eligible, reason = check_eligibility(worker_id, dci_event={
             "disruption_start": dci_data.get("updated_at"),
-            "shift_affected": "Morning",  # hardcoded dynamic shift proxy
-            "dci_score": final_dci
+            "shift_affected": dci_data.get("shift_active", "All"),
+            "dci_score": final_dci,
+            "ndma_override_active": dci_data.get("ndma_override_active", False)
         })
         
         if eligible:
             logger.info(f"✅ PAYOUT APPROVED for Worker {worker_id} | DCI: {final_dci}")
-            # TODO: Hit POST /api/v1/calculate_payout to get the monetary amount
-            # TODO: Insert to payouts table with status=triggered
-            # TODO: Trigger WhatsApp Alert via Twilio
+            # FIRE WHATSAPP ALERT (Requirement §11 / Image #1, #2)
+            send_whatsapp_alert(worker_id, "disruption_alert", {"dci": final_dci})
+            
+            # TODO: Hit POST /api/v1/calculate_payout synchronously or record for EOD settlement
         else:
             logger.warning(f"❌ PAYOUT REJECTED for Worker {worker_id} | Reason: {reason}")
 
@@ -101,6 +103,12 @@ async def process_zone(pincode: str) -> dict:
     final_dci_float = (w_score * 0.3) + (a_score * 0.2) + (h_score * 0.2) + (s_score * 0.2) + (p_score * 0.1)
     final_dci = int(round(final_dci_float))
     
+    # --- NDMA NATURAL DISASTER OVERRIDE (IMAGE REQ) ---
+    ndma_override = social_result.get("ndma_active", False)
+    if ndma_override:
+        logger.critical(f"🚦 NDMA NATURAL DISASTER OVERRIDE active for {pincode}! Forcing catastrophic 95 score.")
+        final_dci = 95
+        
     # --- CATASTROPHIC OVERRIDE BYPASS ---
     # According to README: "If DCI misses threshold but any individual signal 
     # independently crosses its own threshold, bypass DCI calculation."
@@ -110,10 +118,15 @@ async def process_zone(pincode: str) -> dict:
         
     severity = get_severity_tier(final_dci)
     
+    from utils.datetime_utils import get_current_shift_name
+    active_shift = get_current_shift_name()
+
     dci_data = {
         "pincode": pincode,
         "dci_score": final_dci,
         "severity_tier": severity,
+        "ndma_override_active": ndma_override,
+        "shift_active": active_shift,
         "components": {
             "rainfall": weather_result,
             "aqi": aqi_result,
@@ -136,7 +149,8 @@ async def process_zone(pincode: str) -> dict:
         "heat_score": h_score,
         "social_score": s_score,
         "platform_score": p_score,
-        "severity_tier": severity
+        "severity_tier": severity,
+        "ndma_override_active": ndma_override
     }
     
     # Run the synchronous Supabase insert in a background thread to prevent blocking
