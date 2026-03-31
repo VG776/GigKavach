@@ -207,3 +207,9 @@ app.include_router(dci_Dashboard.router)
 from api import workers_Dashboard
 
 app.include_router(workers_Dashboard.router, prefix="/api")
+
+from api.worker_list import router as workers_list_router
+app.include_router(workers_list_router, prefix="/api")
+
+from api.worker_detail import router as workers_detail_router
+app.include_router(workers_detail_router, prefix="/api")
