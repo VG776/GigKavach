@@ -60,7 +60,7 @@ useEffect(() => {
     try {
       const res = await dashboardAPI.getRecentPayouts();
 
-      const formatted = res.data.payouts.map((p) => ({
+      const formatted = res.payouts.map((p) => ({
         id: p.id,
         initials: p.worker_name
           ?.split(" ")
@@ -92,7 +92,7 @@ useEffect(() => {
       setLoading(true);
 
       const res = await dashboardAPI.getActiveZones();
-      setActiveZones(res.data.alerts || []);
+      setActiveZones(res.alerts || []);
     } catch (err) {
       console.error(err);
     } finally {
@@ -135,7 +135,7 @@ useEffect(() => {
   const fetchDCI = async () => {
     try {
       const res = await dashboardAPI.getTodayDCI();
-      setTodayDCI(res.data.total_dci_today ?? 0);
+      setTodayDCI(res.total_dci_today ?? 0);
     } catch (err) {
       console.error(err);
       setTodayDCI(0);
@@ -148,7 +148,7 @@ useEffect(() => {
   const fetchWorkers = async () => {
     try {
       const res = await dashboardAPI.getActiveWorkersWeek();
-      setActiveWorkers(res.data.active_workers_week ?? 0);
+      setActiveWorkers(res.active_workers_week ?? 0);
     } catch (err) {
       console.error(err);
       setActiveWorkers(0);
@@ -194,7 +194,7 @@ useEffect(() => {
   const fetchPayout = async () => {
     try {
       const res = await dashboardAPI.getTodayPayout();
-      setTodayPayout(res.data.total_payout_today ?? 0);
+      setTodayPayout(res.total_payout_today ?? 0);
     } catch (err) {
       console.error(err);
       setTodayPayout(0);

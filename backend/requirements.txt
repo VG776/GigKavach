@@ -1,0 +1,32 @@
+# ── Core API Framework ──
+fastapi
+uvicorn[standard]
+python-dotenv
+
+# ── Database & Cache ──
+supabase
+psycopg2-binary
+redis
+
+# ── HTTP & Parsing ──
+httpx
+aiohttp
+beautifulsoup4
+feedparser
+
+# ── SDKs ──
+twilio
+razorpay
+
+# ── ML Inference (Runtime Only) ──
+xgboost
+numpy
+scikit-learn
+pandas
+
+# ── Validation & Utils ──
+pydantic
+pydantic-settings
+apscheduler
+cryptography
+phonenumbers

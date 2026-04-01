@@ -157,15 +157,29 @@ Backend API for the GigKavach platform serving food delivery workers (Zomato/Swi
 
 
 # ─── CORS Middleware ──────────────────────────────────────────────────────────
-# Required so the React frontend (Vite on :5173 or Vercel) can call this API.
+# Allow React frontend (Vite locally, Vercel in production) to call this API
+allowed_origins = [
+    "http://localhost:5173",        # Local dev: Vite frontend (npm run dev)
+    "http://localhost:3000",        # Alternative local port
+    settings.FRONTEND_LOCAL_URL,    # From settings.py
+]
+
+# Production & deployment origins
+if settings.APP_ENV == "development":
+    allowed_origins.append("*")     # Allow all in development for testing
+else:
+    # Production: Add configured production frontend URL
+    if settings.FRONTEND_PRODUCTION_URL:
+        allowed_origins.append(settings.FRONTEND_PRODUCTION_URL)
+
+# Remove empty strings and duplicates
+allowed_origins = [url for url in set(allowed_origins) if url and url != ""]
+
+logger.info(f"[CORS] Allowed origins: {allowed_origins}")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",    # Vite dev server (V Saatwik's frontend)
-        "http://localhost:3000",    # Alternative React dev port
-        "https://*.vercel.app",     # Production frontend on Vercel
-        "*" if settings.APP_ENV == "development" else "",  # Open in dev
-    ],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

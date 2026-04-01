@@ -1,29 +1,95 @@
-node_modules/
+# ═════════════════════════════════════════════════════════════════════
+# Environment Variables (SECRETS - NEVER COMMIT)
+# ═════════════════════════════════════════════════════════════════════
 .env
-.env.example
-__pychache__/
-*.pyc
-logs/
-.DS_Store
-dist/
-build/
-data/
-.DS_Store
-*.log
-*.csv
-*.xlsx
-*.zip
-*.tar.gz
-*.egg-info/
-*.egg
-*.iml
+.env.local
+.env.*.local
+.env.development
+.env.production.local
+# .env.example is committed (it's a template)
+
+# ═════════════════════════════════════════════════════════════════════
+# Backend (Python)
+# ═════════════════════════════════════════════════════════════════════
+backend/__pycache__/
+backend/*.pyc
+backend/*.pyo
+backend/*.egg-info/
+backend/.venv/
+backend/venv/
+backend/.pytest_cache/
+backend/.coverage
+backend/htmlcov/
+backend/logs/
+backend/*.log
+
+# ═════════════════════════════════════════════════════════════════════
+# Frontend (Node.js)
+# ═════════════════════════════════════════════════════════════════════
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/coverage/
+frontend/.turbo/
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+
+# ═════════════════════════════════════════════════════════════════════
+# IDE & Editor
+# ═════════════════════════════════════════════════════════════════════
 .idea/
 .vscode/
-*.sublime-project
-*.sublime-workspace
 *.swp
 *.swo
+*~
+*.sublime-project
+*.sublime-workspace
+
+# ═════════════════════════════════════════════════════════════════════
+# OS Files
+# ═════════════════════════════════════════════════════════════════════
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+
+# ═════════════════════════════════════════════════════════════════════
+# Build & Cache
+# ═════════════════════════════════════════════════════════════════════
+dist/
+build/
+*.egg
+*.egg-info/
+*.iml
+.vercel/
+.next/
+out/
+
+# ═════════════════════════════════════════════════════════════════════
+# Logs
+# ═════════════════════════════════════════════════════════════════════
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# ═════════════════════════════════════════════════════════════════════
+# Temporary Files
+# ═════════════════════════════════════════════════════════════════════
 *.bak
 *.tmp
-*.backup    
-reports/
+*.backup
+*.swp
+
+# ═════════════════════════════════════════════════════════════════════
+# Database & Cache (non-git)
+# ═════════════════════════════════════════════════════════════════════
+*.db
+*.sqlite
+*.sqlite3
+redis-dump.rdb
+
+# Keep these directories (committed with .gitkeep):
+# - data/ (training data & reference files)
+# - models/ (trained ML models)
+# - reports/ (documentation & reports)

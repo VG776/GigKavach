@@ -90,7 +90,7 @@ const [isModalOpen, setIsModalOpen] = useState(false);
     try {
       const response = await workerAPI.getAll();
 
-      const formatted = response.data.map((w) => ({
+      const formatted = response.map((w) => ({
         id: w.id,
         name: w.name,
         phone: w.phone,

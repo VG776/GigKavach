@@ -14,7 +14,7 @@ from functools import lru_cache
 from pathlib import Path
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 ENV_FILE_PATH = PROJECT_ROOT / ".env"
 
 
@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     # ── App ──────────────────────────────────────────────────────────
     APP_ENV: str = "development"
     APP_SECRET_KEY: str = "change-me-in-production"
+    
+    # ── Frontend URLs (for CORS) ──────────────────────────────────────
+    FRONTEND_LOCAL_URL: str = "http://localhost:5173"
+    FRONTEND_PRODUCTION_URL: str = ""  # Set in .env when deployed (e.g., https://app.vercel.app)
 
     # ── Supabase ──────────────────────────────────────────────────────
     SUPABASE_URL: str = ""

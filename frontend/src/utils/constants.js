@@ -3,16 +3,18 @@
  */
 
 // API Base Configuration
+// ✅ DO NOT include /api in BASE_URL — endpoints add their own paths
 export const API_CONFIG = {
-  BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api',
+  BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000',
   TIMEOUT: 30000,
   RETRY_ATTEMPTS: 3,
   RETRY_DELAY: 1000,
 };
 
 // WebSocket Configuration
+// For Render: wss://your-app.onrender.com (no /api prefix)
 export const WS_CONFIG = {
-  BASE_URL: import.meta.env.VITE_WS_BASE_URL || 'ws://localhost:3000',
+  BASE_URL: import.meta.env.VITE_WS_BASE_URL || 'ws://localhost:8000',
   RECONNECT_ATTEMPTS: 5,
   RECONNECT_DELAY: 3000,
 };

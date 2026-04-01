@@ -1,0 +1,43 @@
+# Render Backend (Python FastAPI)
+backend/
+*.pyc
+__pycache__/
+.pytest_cache/
+*.egg-info/
+.venv/
+venv/
+env/
+.env
+.env.local
+logs/
+*.log
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.coverage
+htmlcov/
+dist/
+build/
+
+# Dependencies cache
+pip-cache/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# ML Models (can be large, might need separate storage)
+models/*.pkl
+models/*.joblib
+models/*.h5
+
+# Data files (keep, but exclude during git for large files)
+data/raw/
+data/processed/
+
+# Node modules from accidental frontend inclusion
+node_modules/

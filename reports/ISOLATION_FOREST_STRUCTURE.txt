@@ -1,0 +1,97 @@
+===============================================================================
+ISOLATION FOREST FRAUD DETECTION - FOLDER STRUCTURE CORRECTED
+===============================================================================
+
+✅ FIXED: Reorganized to match GigKavach project conventions
+
+BEFORE (WRONG):
+  ❌ /backend/data/isolation_forest_*.csv  (mixed with code)
+  ❌ Scattered across multiple locations
+
+AFTER (CORRECT):
+  ✅ /data/isolation_forest_*.csv          (root-level, with XGBoost data)
+  ✅ /models/isolation_forest_v1/*         (root-level, with v3 docs)
+  ✅ /backend/ml/isolation_forest*.py      (code only)
+  ✅ /backend/tests/test_isolation*.py     (tests only)
+
+===============================================================================
+FOLDER STRUCTURE
+===============================================================================
+
+/data/ (ROOT-LEVEL - DATASETS)
+├── isolation_forest_training_data.csv         366 KB   Training claims
+├── isolation_forest_training_features.csv     344 KB   Extracted features
+├── isolation_forest_training_raw.csv          366 KB   Synthetic raw data
+├── isolation_forest_dataset_metadata.json     1.1 KB  Dataset statistics
+└── isolation_forest_detailed_results.csv      380 KB   Per-claim results
+
+/models/isolation_forest_v1/ (ROOT-LEVEL - ARTIFACTS)
+├── README.md                                         Complete documentation
+├── isolation_forest_model.pkl                1.0 MB   Trained model
+├── isolation_forest_scaler.pkl               1.5 KB   Feature scaler
+└── isolation_forest_metadata.json            3.7 KB   Feature definitions
+
+/backend/ml/ (CODE - UNCHANGED LOCATION)
+├── isolation_forest_feature_engineering.py           Feature engineering
+├── train_isolation_forest_model.py                   Training pipeline
+└── isolation_forest.py                               Inference module
+
+/backend/tests/ (TESTS - UNCHANGED LOCATION)
+└── test_isolation_forest_dataset.py                  Dataset validation
+
+===============================================================================
+ALIGNMENT WITH GIGKAVACH CONVENTIONS
+===============================================================================
+
+ROOT-LEVEL FOLDERS:
+  /data/          - XGBoost training data + Isolation Forest training data
+  /models/        - XGBoost v3 documentation + Isolation Forest v1 artifacts
+  /frontend/      - React/TypeScript UI
+  /backend/       - Python FastAPI server
+
+BACKEND FOLDERS:
+  /backend/ml/    - ML models and training (XGBoost, Isolation Forest)
+  /backend/api/   - API endpoints
+  /backend/services/ - Business logic
+  /backend/cron/  - Scheduled tasks (claims_trigger.py uses fraud detector)
+  /backend/tests/ - Test suites
+
+===============================================================================
+FILES UPDATED
+===============================================================================
+
+1. backend/ml/isolation_forest_feature_engineering.py
+   Changed: DATA_DIR from /backend/data → /data (root-level)
+
+2. backend/ml/train_isolation_forest_model.py
+   Changed: Paths to use /data (root) and /models/isolation_forest_v1 (root)
+
+3. backend/ml/isolation_forest.py
+   Changed: MODEL_DIR from /backend/data → /models/isolation_forest_v1
+
+4. backend/tests/test_isolation_forest_dataset.py
+   Changed: DATA_DIR from /backend/data → /data (root-level)
+
+5. models/isolation_forest_v1/README.md
+   Created: Complete documentation (matching XGBoost v3 style)
+
+===============================================================================
+STATUS
+===============================================================================
+
+✅ Feature engineering module complete
+✅ 1,500 training claims generated (1,425 normal + 75 fraud)
+✅ 19 fraud signals extracted per claim
+✅ Isolation Forest model trained (100% synthetic fraud detection)
+✅ Model artifacts saved to /models/isolation_forest_v1/
+✅ Datasets saved to /data/
+✅ Documentation created
+✅ Tests passing
+✅ Folder structure aligned with conventions
+
+NEXT STEPS:
+1. Integrate inference module with claims_trigger.py
+2. Add complementary rule-based checks for threshold gaming
+3. Production deployment and monitoring
+
+===============================================================================

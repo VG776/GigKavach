@@ -9,12 +9,14 @@ gigkavach/
 ├── requirements.txt                   # Python dependencies (FastAPI, scikit-learn, etc.)
 ├── package.json                       # Node.js dependencies for frontend
 │
-├── .env.example                       # Example environment variables (no secrets)
-├── .env                               # Actual environment variables (GITIGNORED)
+├── .env.example                       # Example environment variables (no secrets) ✅ COMMITTED
+├── .env                               # Actual environment variables (GITIGNORED) ⚠️ NEVER COMMIT
 │
+├── Dockerfile                         # Docker image for backend (optional, for local testing)
 ├── docker-compose.yml                 # Optional: Docker setup for local development
-├── render.yaml                        # Render deployment configuration
-├── vercel.json                        # Vercel deployment configuration
+│
+├── render.yaml                        # 🟢 Render deployment configuration (REQUIRED)
+├── vercel.json                        # 🟢 Vercel deployment configuration (REQUIRED)
 │
 ├── backend/                           # FastAPI backend application
 │   ├── main.py                        # Entry point - FastAPI app initialization
@@ -277,6 +279,10 @@ gigkavach/
     ├── payout.log                     # Payout execution logs
     ├── fraud.log                      # Fraud detection logs
     └── api_calls.log                  # External API call logs
+
+└── .github/                           # GitHub configuration
+    └── workflows/
+        └── deploy.yml                 # 🟢 CI/CD automation (optional, GitHub Actions)
 ```
 
 ---
@@ -470,7 +476,117 @@ All materials for the 2-minute demo video:
 
 ---
 
-## 🎯 Key Principles
+## � Deployment Configuration
+
+### **Render (Backend Deployment)**
+
+**File: `render.yaml`**
+
+Specifies how Render should build and run your FastAPI backend:
+
+```yaml
+services:
+  - type: web
+    name: gigkavach-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+```
+
+**Key Points:**
+- ✅ Automatically detects `requirements.txt` and installs dependencies
+- ✅ Starts FastAPI server on Render's provided port
+- ✅ Health check endpoint: `GET /health`
+- ✅ Environment variables set in Render dashboard (not in render.yaml)
+
+---
+
+### **Vercel (Frontend Deployment)**
+
+**File: `vercel.json`**
+
+Specifies how Vercel should build and deploy your React frontend:
+
+```json
+{
+  "buildCommand": "cd frontend && npm install && npm run build",
+  "outputDirectory": "frontend/dist",
+  "rewrites": [
+    {
+      "source": "/:path*",
+      "destination": "/index.html"
+    }
+  ]
+}
+```
+
+**Key Points:**
+- ✅ Runs `npm run build` to create optimized production bundle
+- ✅ Output directory: `frontend/dist` (Vite default)
+- ✅ Rewrites all routes to `/index.html` for SPA routing
+- ✅ Environment variables (VITE_API_BASE_URL, VITE_WS_BASE_URL) set in Vercel dashboard
+
+---
+
+### **Environment Variables**
+
+**File: `.env.example`**
+
+Template file that shows all required environment variables. Never commit actual `.env` file with secrets.
+
+**Usage:**
+1. Copy: `cp .env.example .env`
+2. Fill in actual values
+3. For Render: Add to Environment Variables in dashboard
+4. For Vercel: Add to Project Settings → Environment Variables
+5. For local dev: Load with `source .env` or use `python-dotenv`
+
+---
+
+### **GitHub Actions CI/CD (Optional)**
+
+**File: `.github/workflows/deploy.yml`**
+
+Automates testing and deployment when you push to main branch:
+
+1. **Run Backend Tests**: `pytest tests/`
+2. **Run Frontend Tests**: `npm run build && npm run lint`
+3. **Deploy to Render**: If tests pass, auto-deploys backend
+4. **Deploy to Vercel**: If tests pass, auto-deploys frontend
+
+**Setup Required:**
+- Add secrets to GitHub: `RENDER_API_KEY`, `VERCEL_TOKEN`
+- Configure in repository Settings → Secrets → Actions
+
+---
+
+### **Docker Support (Optional)**
+
+**File: `Dockerfile`**
+
+Multi-stage Docker image for consistent development/production environments:
+
+```dockerfile
+FROM python:3.11-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+COPY backend/ .
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+**Usage:**
+```bash
+# Build image
+docker build -t gigkavach-backend .
+
+# Run container
+docker run -p 8000:8000 --env-file .env gigkavach-backend
+```
+
+---
+
 
 1. **Separation of Concerns**: API routes → Services → Database. Never write business logic in route handlers.
 

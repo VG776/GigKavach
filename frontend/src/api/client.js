@@ -8,6 +8,7 @@ import { API_CONFIG, STORAGE_KEYS } from '../utils/constants.js';
 const client = axios.create({
   baseURL: API_CONFIG.BASE_URL,
   timeout: API_CONFIG.TIMEOUT,
+  withCredentials: true, // ✅ Allow credentials in cross-origin requests
   headers: {
     'Content-Type': 'application/json',
   },
@@ -109,3 +110,4 @@ const apiClient = {
 };
 
 export default apiClient;
+export { client }; // ✅ Also export the raw axios instance for advanced use cases
