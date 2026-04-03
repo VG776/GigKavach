@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { LayoutDashboard, Users, Wallet, ShieldAlert, Settings, X, Map, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, Users, Wallet, ShieldAlert, Settings, X, Map, BarChart3, LogOut } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 const navigationItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -12,6 +13,18 @@ const navigationItems = [
 ];
 
 export const Sidebar = ({ activePage, onNavigate, isMobileOpen, onMobileClose }) => {
+  const { user, logout } = useAuth();
+  
+  // Get user info from auth context
+  const userEmail = user?.email || 'user@example.com';
+  const userName = user?.user_metadata?.full_name || userEmail.split('@')[0] || 'User';
+  const userInitial = userName.charAt(0).toUpperCase();
+
+  const handleLogout = async () => {
+    await logout();
+    window.location.href = '/login';
+  };
+
   return (
     <>
       {/* Mobile Overlay */}
@@ -83,12 +96,19 @@ export const Sidebar = ({ activePage, onNavigate, isMobileOpen, onMobileClose })
         <div className="p-4 border-t border-gray-200 dark:border-gray-800">
           <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
             <div className="w-10 h-10 rounded-full bg-gigkavach-orange flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-              A
+              {userInitial}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm text-gray-900 dark:text-white font-medium truncate">Admin</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">admin@gigkavach.com</p>
+              <p className="text-sm text-gray-900 dark:text-white font-medium truncate">{userName}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{userEmail}</p>
             </div>
+            <button
+              onClick={handleLogout}
+              className="p-2 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg transition-colors text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400"
+              title="Logout"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
           </div>
         </div>
       </aside>

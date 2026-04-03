@@ -33,6 +33,7 @@ from api.dci import router as dci_router
 from api.payouts import router as payouts_router
 from api.fraud import router as fraud_router       # Task 8: now active
 from api.whatsapp import router as whatsapp_router
+from api.auth import router as auth_router         # Authentication routes
 
 
 # ─── Logging Setup ────────────────────────────────────────────────────────────
@@ -63,6 +64,8 @@ async def lifespan(app: FastAPI):
     # teammates to run partial setups during development)
     if not settings.SUPABASE_URL:
         logger.warning("⚠️  SUPABASE_URL not set — database operations will fail")
+    if not settings.SUPABASE_ANON_KEY:
+        logger.warning("⚠️  SUPABASE_ANON_KEY not set — authentication will fail")
     if not settings.TWILIO_ACCOUNT_SID:
         logger.warning("⚠️  TWILIO_ACCOUNT_SID not set — WhatsApp messages will fail")
     if not settings.TOMORROW_IO_API_KEY:
@@ -197,6 +200,7 @@ app.add_middleware(
 # Add new routers here as teammates build them.
 
 app.include_router(health_router)
+app.include_router(auth_router, prefix="/api/v1")           # Authentication routes
 app.include_router(workers_router)    # POST /api/v1/register — Sumukh
 app.include_router(policies_router)   # GET + PATCH /api/v1/policy/{id} — Sumukh
 app.include_router(dci_router, prefix="/api/v1")           # Varshit — DCI engine

@@ -1,12 +1,19 @@
 import { useState, useEffect, useRef } from 'react';
 import { Search, Bell, Moon, Sun, Menu, Settings, LogOut } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 export const Header = ({ onMobileMenuToggle }) => {
+  const { user, logout } = useAuth();
   const [darkMode, setDarkMode] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const notificationRef = useRef(null);
   const userMenuRef = useRef(null);
+
+  // Get user info from auth context
+  const userEmail = user?.email || 'user@example.com';
+  const userName = user?.user_metadata?.full_name || userEmail.split('@')[0] || 'User';
+  const userInitial = userName.charAt(0).toUpperCase();
 
   useEffect(() => {
     const isDark = document.documentElement.classList.contains('dark');
@@ -38,6 +45,11 @@ export const Header = ({ onMobileMenuToggle }) => {
       document.documentElement.classList.remove('dark');
       localStorage.setItem('darkMode', 'false');
     }
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    window.location.href = '/login';
   };
 
   return (
@@ -120,22 +132,25 @@ export const Header = ({ onMobileMenuToggle }) => {
               className="flex items-center gap-2 p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
             >
               <div className="w-8 h-8 rounded-full bg-gigkavach-orange flex items-center justify-center text-white font-bold text-sm">
-                A
+                {userInitial}
               </div>
             </button>
 
             {showUserMenu && (
               <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-2xl overflow-hidden z-50">
                 <div className="p-4 border-b dark:border-gray-700">
-                  <p className="text-sm font-semibold text-gray-900 dark:text-white">Admin User</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">admin@gigkavach.com</p>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{userName}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{userEmail}</p>
                 </div>
                 <div className="py-2">
                   <button className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
                     <Settings className="w-4 h-4" />
                     Settings
                   </button>
-                  <button className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+                  <button 
+                    onClick={handleLogout}
+                    className="w-full flex items-center gap-3 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  >
                     <LogOut className="w-4 h-4" />
                     Logout
                   </button>
