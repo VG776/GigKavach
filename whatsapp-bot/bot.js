@@ -8,7 +8,8 @@
  * - Outbound alerts and confirmations from backend
  */
 
-import { Client, LocalAuth } from 'whatsapp-web.js';
+import pkg from 'whatsapp-web.js';
+const { Client, LocalAuth } = pkg;
 import qrcode from 'qrcode-terminal';
 import axios from 'axios';
 import express from 'express';
@@ -24,9 +25,19 @@ dotenv.config();
 
 const client = new Client({
   authStrategy: new LocalAuth(),
+  authTimeoutMs: 60000, // 1 minute to scan before timing out
+  qrMaxRetries: 10,     // Allow the QR to refresh up to 10 times
   puppeteer: {
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+    ],
     headless: true,
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+    protocolTimeout: 0,
+    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
   },
 });
 
@@ -251,10 +262,8 @@ app.get('/health', (req, res) => {
  * GET /sessions
  * Get count of active sessions (for monitoring)
  */
-app.get('/sessions', (req, res) => {
-  const SessionManager = (
-    await import('./services/session-manager.js')
-  ).default;
+app.get('/sessions', async (req, res) => {
+  const SessionManager = (await import('./services/session-manager.js')).default;
   const sessions = SessionManager.getAllSessions();
 
   res.json({
