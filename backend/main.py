@@ -33,6 +33,7 @@ from api.dci import router as dci_router
 from api.payouts import router as payouts_router
 from api.fraud import router as fraud_router       # Task 8: now active
 from api.whatsapp import router as whatsapp_router
+from api.whatsapp_integration import router as whatsapp_integration_router
 from api.auth import router as auth_router         # Authentication routes
 
 
@@ -210,6 +211,7 @@ app.include_router(workers_router, prefix="/api/v1")        # POST /api/v1/regis
 app.include_router(policies_router, prefix="/api/v1")       # GET + PATCH /api/v1/policy/{id}
 app.include_router(dci_router, prefix="/api/v1")            # Varshit — DCI engine
 app.include_router(whatsapp_router, prefix="/api/v1")       # Standardized prefix
+app.include_router(whatsapp_integration_router, prefix="/api/v1")  # Bot service integration
 app.include_router(payouts_router, prefix="/api/v1")        # Consolidated prefix
 app.include_router(fraud_router, prefix="/api/v1")          # Vijeth — fraud assessment
 # TODO: app.include_router(dashboard_router, prefix="/api/v1")  # V Saatwik — admin metrics
