@@ -7,14 +7,13 @@
 2. [🛠 Tech Stack](#-2-tech-stack)
 3. [🌐 Live Demo](#-3-live-demo-render--vercel)
 4. [🎥 Demo Video](#-4-demo-video)
-5. [📸 Screenshots](#-5-screenshots)
-6. [🧩 Local Setup (FAILSAFE)](#-6-local-setup-failsafe)
-7. [🧪 API Endpoints](#-7-api-endpoints)
-8. [🧱 Project Structure](#-8-project-structure)
-9. [✨ Key Features](#-9-key-features)
-10. [⚠️ Troubleshooting](#-10-troubleshooting)
-11. [👥 Team Details](#-11-team-details)
-12. [☁️ Deployment Details](#-bonus-deployment-section)
+5. [🧩 Local Setup (FAILSAFE)](#-6-local-setup-failsafe)
+6. [🧪 API Endpoints](#-7-api-endpoints)
+7. [🧱 Project Structure](#-8-project-structure)
+8. [✨ Key Features](#-9-key-features)
+9. [⚠️ Troubleshooting](#-10-troubleshooting)
+10. [👥 Team Details](#-11-team-details)
+11. [☁️ Deployment Details](#-bonus-deployment-section)
 
 ---
 
@@ -71,22 +70,8 @@
 
 ---
 
-## 📸 5. Screenshots
 
-## 📸 Screenshots
-
-### 📊 Admin Dashboard
-![Dashboard](./screenshots/dashboard.png)
-
-### 🗺️ Live Disruption Heatmap
-![Heatmap](./screenshots/heatmap.png)
-
-### 📱 WhatsApp Interface (Onboarding)
-![WhatsApp](./screenshots/whatsapp.png)
-
----
-
-# 🧩 6. Local Setup (DETAILED GUIDE)
+# 🧩 5. Local Setup (DETAILED GUIDE)
 
 This guide works for **Windows, Mac, and Linux**. You'll have GigKavach running in 15 minutes.
 
@@ -334,7 +319,7 @@ If you see errors, check Troubleshooting below.
 
 ---
 
-## 🧪 7. API Endpoints
+## 🧪 6. API Endpoints
 
 ## 🧪 API Endpoints
 
@@ -349,7 +334,7 @@ If you see errors, check Troubleshooting below.
 
 ---
 
-## 🧱 8. Project Structure
+## 🧱 7. Project Structure
 
 ## 🧱 Project Structure
 
@@ -394,7 +379,7 @@ DEVTrails/
 
 ---
 
-## ✨ 9. Key Features
+## ✨ 8. Key Features
 
 | 🎯 | Feature | What Makes It Special |
 |----|---------|----------------------|
@@ -411,7 +396,7 @@ DEVTrails/
 
 ---
 
-## ⚠️ 10. Troubleshooting
+## ⚠️ 9. Troubleshooting
 
 ## ⚠️ Troubleshooting
 
@@ -432,7 +417,7 @@ Check your `.env` file. Ensure `SUPABASE_URL` and `SUPABASE_ANON_KEY` are valid.
 
 ---
 
-## 👥 11. Team Details
+## 👥 10. Team Details
 
 ## 👥 Team Quadcore
 
