@@ -97,6 +97,78 @@ gigkavach/
 │       ├── test_eligibility.py        # Eligibility check tests
 │       └── test_api_endpoints.py      # API endpoint integration tests
 │
+├── whatsapp-bot/                      # WhatsApp Bot Service (Node.js + whatsapp-web.js)
+│   ├── package.json                   # Node.js dependencies (whatsapp-web.js, express, axios, etc.)
+│   ├── .env.example                   # Environment template (BACKEND_URL, BOT_PORT, LOG_LEVEL)
+│   ├── README.md                      # Complete setup guide, API docs, troubleshooting
+│   │
+│   ├── bot.js                         # Main WhatsApp client (300+ lines)
+│   │                                  # - Initializes whatsapp-web.js WebSocket client
+│   │                                  # - Handles QR code authentication with LocalAuth
+│   │                                  # - Routes inbound messages to message-handler
+│   │                                  # - Runs Express API server on port 3001
+│   │                                  # - Graceful shutdown on SIGINT
+│   │
+│   ├── config/                        # Configuration files
+│   │   ├── messages.json              # Multilingual message templates (5 languages: en, kn, hi, ta, te)
+│   │   │                              # - 30+ messages (onboarding, alerts, payouts, errors, commands)
+│   │   │                              # - Template substitution: {dci}, {amount}, {plan}, etc.
+│   │   └── constants.js               # Constants (language codes, command names, API endpoints)
+│   │
+│   ├── services/                      # Core service layer
+│   │   ├── session-manager.js         # Session persistence and user context management
+│   │   │                              # - CRUD: getOrCreateSession(), updateSession(), nextStep()
+│   │   │                              # - File-based persistence: ./data/sessions/{phone}.json
+│   │   │                              # - User registry: ./data/users.json (phone → UUID lookup)
+│   │   │                              # - Session schema: userId, language, onboardingStep, tempData, isOnboarded, workerData
+│   │   │                              # - Handles 4-level directory creation for session files
+│   │   │
+│   │   └── message-handler.js         # Main message router based on command and session state
+│   │                                  # - Routes commands (HELP, LANG, STATUS, RENEW, SHIFT, APPEAL)
+│   │                                  # - Routes onboarding step progression
+│   │                                  # - Calls appropriate handler based on current state
+│   │                                  # - Provides localized message retrieval with template substitution
+│   │
+│   ├── handlers/                      # Business logic handlers for each workflow
+│   │   ├── onboarding.js              # 7-step onboarding pipeline
+│   │   │                              # - Step 1: Language selection (en, kn, hi, ta, te)
+│   │   │                              # - Step 2: Platform selection (delivery, ride-sharing)
+│   │   │                              # - Step 3: Shift selection (morning 6-12, afternoon 12-6, evening 6-12)
+│   │   │                              # - Step 4: UPI entry (regex validation)
+│   │   │                              # - Step 5: Pincode entry (6-digit validation)
+│   │   │                              # - Step 6: Plan selection (bronze, silver, gold)
+│   │   │                              # - Step 7: Complete onboarding (POST /api/v1/register to backend)
+│   │   │                              # - Each step validates input, updates session, handles errors gracefully
+│   │   │                              # - Stores registration response (UUID, policy start date) in session.workerData
+│   │   │
+│   │   └── commands.js                # Stateful command handlers for post-onboarding
+│   │                                  # - STATUS: Fetches current DCI from /dci/{pincode}, calculates severity tier
+│   │                                  # - RENEW: Patches policy endpoint (action=renew), handles renewal window validation
+│   │                                  # - SHIFT: Sets commandState=awaiting_shift, collects shift update via followup message
+│   │                                  # - APPEAL: Sets commandState=filing_appeal, collects fraud appeal with 48-hour window
+│   │                                  # - LANG: Changes session.language, confirms with translated message
+│   │                                  # - All commands include error handling and API fallback behavior
+│   │
+│   ├── utils/                         # Utility functions
+│   │   └── validators.js              # Input validation utilities
+│   │                                  # - validateUPI() - Regex check for valid UPI format
+│   │                                  # - validatePincode() - 6-digit validation with leading zero support
+│   │                                  # - validatePhone() - 10-digit Indian phone number
+│   │                                  # - validatePincodes() - Array validator (1-5 pin codes)
+│   │                                  # - validatePlan() - Plan selection from fixed set (bronze, silver, gold)
+│   │                                  # - validatePlatform() - Platform selection (delivery, ride-sharing)
+│   │                                  # - validateShift() - Shift window validation
+│   │
+│   ├── data/                          # Runtime session and user data (GITIGNORED)
+│   │   ├── sessions/                  # Directory for session files (created on first use)
+│   │   │   └── {phone}.json           # Example: 9876543210.json
+│   │   │                              # Content: { "userId": "uuid-123", "language": "en", "onboardingStep": 3, ... }
+│   │   │
+│   │   └── users.json                 # Global user registry for quick lookups
+│   │                                  # Content: { "9876543210": { "uuid": "uuid-123", "language": "en", ... } }
+│   │
+│   └── .gitignore                     # Ignores node_modules, .env, data/, logs/
+│
 ├── frontend/                          # React frontend application
 │   ├── index.html                     # HTML entry point
 │   ├── vite.config.js                 # Vite build configuration
@@ -348,6 +420,198 @@ Model training and inference code:
 - **`dci_poller.py`**: Runs every 5 minutes, polls all APIs, computes DCI, caches results
 - **`rss_parser.py`**: Runs every 30 minutes, fetches RSS, classifies headlines, updates social component
 - **`scheduler.py`**: APScheduler configuration to run all cron jobs
+
+#### **`backend/api/whatsapp_integration.py`** — WhatsApp Bot Integration Layer
+Backend endpoints that forward requests to the WhatsApp bot service (running on port 3001):
+
+- **`POST /api/v1/whatsapp/send-message`**: Send direct message to worker via WhatsApp
+  - Body: `{"phone": "919876543210", "message": "Your payout has been sent", "language": "en"}`
+  - Called by payout service when processing payments
+  
+- **`POST /api/v1/whatsapp/broadcast-dci-alert`**: Broadcast DCI-triggered disruption alert to all active workers in a zone
+  - Body: `{"pincode": "560001", "dci_score": 75, "severity": "high", "workers": [...]}`
+  - Called by DCI poller when DCI >= 65
+  
+- **`POST /api/v1/whatsapp/send-payout-confirmation`**: Send detailed payout confirmation with receipt
+  - Body: `{"phone": "919876543210", "amount": 450, "upi": "user@upi", "reference": "RAZ123"}`
+  - Called by payment service after Razorpay transaction succeeds
+  
+- **`GET /api/v1/whatsapp/health`**: Check bot service health status
+- **`GET /api/v1/whatsapp/sessions`**: List all active WhatsApp sessions (DEBUG only)
+
+---
+
+### **WhatsApp Bot Structure**
+
+The WhatsApp bot is a separate Node.js service that runs independently on port 3001. It manages worker communication via WhatsApp Web (no Twilio dependency).
+
+#### **`whatsapp-bot/bot.js`** — Main WhatsApp Client (300+ lines)
+Core WhatsApp connection and Express API server:
+
+- **WhatsApp Events**:
+  - `ready`: Connection established, bot is ready to receive messages
+  - `qr`: QR code generated for user to scan (first-time setup only)
+  - `message`: Inbound message from worker → routes to message-handler
+  - `authenticated`: Session persisted via LocalAuth
+  
+- **Express API Endpoints**:
+  - `POST /send-message`: Direct message to phone
+  - `POST /broadcast-dci-alert`: Alert all workers in zone
+  - `POST /send-payout-confirmation`: Payout receipt message
+  - `GET /health`: Service health check
+  - `GET /sessions`: List active sessions (returns users.json)
+
+- **Session Persistence**:
+  - Uses `whatsapp-web.js` LocalAuth (browser session file)
+  - Survives bot restart without re-scanning QR code
+  - Sessions stored in `.wwebjs_auth/` directory
+
+#### **`whatsapp-bot/services/session-manager.js`** — Session Persistence
+File-based user context management:
+
+- **CRUD Operations**:
+  - `getOrCreateSession(phone)`: Returns session or creates new one with UUID
+  - `updateSession(phone, data)`: Merges data into existing session
+  - `updateTempData(phone, key, value)`: Stores temporary data during onboarding
+  - `nextStep(phone)`: Increments onboardingStep counter
+  - `completeOnboarding(phone)`: Sets isOnboarded = true after step 7
+  - `registerWorker(phone, workerData)`: Stores backend registration response
+
+- **Session Schema**:
+```json
+{
+  "userId": "a1b2c3d4-e5f6-7890...",
+  "language": "en",
+  "onboardingStep": 0,
+  "tempData": { "platform": "delivery", "shift": "morning" },
+  "isOnboarded": false,
+  "workerData": { "policy_id": "POL123", "start_date": "2025-03-29" },
+  "createdAt": "2025-03-29T10:30:00Z",
+  "lastMessageAt": "2025-03-29T10:35:00Z"
+}
+```
+
+- **Persistence Strategy**:
+  - Each phone number gets a JSON file: `./data/sessions/{phone}.json`
+  - User registry at `./data/users.json` for quick lookups
+  - 4-level directory creation (handles edge cases)
+  - Session survives bot restart (critical for reliability)
+
+#### **`whatsapp-bot/services/message-handler.js`** — Message Router
+Main logic to route messages to appropriate handler:
+
+**Command Processing** (checked first):
+- `HELP`: Displays available commands and onboarding instructions
+- `LANG`: Changes worker language preference
+- `STATUS`: Fetch current DCI score and severity level
+- `RENEW`: Renew weekly policy (if renewalable)
+- `SHIFT`: Update working shift
+- `APPEAL`: File fraud appeal against suspension
+- `JOIN`: Start/restart onboarding
+
+**Onboarding Routing** (if not onboarded):
+- Routes to `onboarding.js` based on current step (0-6)
+
+**Command Routing** (if onboarded):
+- Routes to `commands.js` for STATUS, RENEW, SHIFT, APPEAL processing
+
+**Fallback**:
+- If message doesn't match commands, sends help text
+
+#### **`whatsapp-bot/handlers/onboarding.js`** — 7-Step Onboarding Pipeline
+
+| Step | Handler | Validation | Backend Call |
+|------|---------|------------|--------------|
+| 0 | `handleLanguageSelection()` | Must match: en, kn, hi, ta, te | None (local) |
+| 1 | `handlePlatformSelection()` | Must match: delivery, ride-sharing | None (local) |
+| 2 | `handleShiftSelection()` | Must match: morning, afternoon, evening | None (local) |
+| 3 | `handleUPIEntry()` | Regex: valid UPI format (user@upi) | None (validation only) |
+| 4 | `handlePincodeEntry()` | Regex: 6 digits, valid Karnataka pincode | None (validation only) |
+| 5 | `handlePlanSelection()` | Must match: bronze, silver, gold | None (local) |
+| 6 | `completeOnboarding()` | Call backend registration | `POST /api/v1/register` → stores response |
+
+**Each Step**:
+1. Validates user input against rules
+2. Updates `session.tempData` with validated value
+3. Calls `nextStep()` to increment counter
+4. At step 6: Calls backend `/api/v1/register` with complete workerData
+5. Stores registration response (UUID, policy start) in `session.workerData`
+6. Sets `session.isOnboarded = true`
+
+**Error Handling**:
+- Invalid input: Localized error message + retry prompt
+- Backend registration failure: Detailed error message + grace period retry
+
+#### **`whatsapp-bot/handlers/commands.js`** — Post-Onboarding Commands
+
+| Command | Action | Backend Endpoint | Response |
+|---------|--------|------------------|----------|
+| `STATUS` | Fetch current DCI | `GET /api/v1/dci/{pincode}` | "DCI is {score} ({tier})" with guidance |
+| `RENEW` | Renew weekly policy | `PATCH /api/v1/policy/{policy_id}` with action=renew | "Policy renewed until..." or error |
+| `SHIFT` | Update working shift | Awaits followup message for shift selection | Calls handlers.updateShift() |
+| `APPEAL` | File fraud appeal | Awaits followup with appeal details | Submits to `/api/v1/fraud/appeal` |
+
+**All Commands**:
+- Check `session.isOnboarded == true` (reject if false)
+- Make API call to backend with worker context
+- Include error handling (API timeout, network failure)
+- Return localized response with actionable guidance
+
+#### **`whatsapp-bot/config/messages.json`** — Multilingual Templates
+
+5 languages supported: English (en), Kannada (kn), Hindi (hi), Tamil (ta), Telugu (te)
+
+**30+ Message Keys** organized by flow:
+
+**Onboarding Messages**:
+- `welcome`: Initial greeting
+- `ask_language`: Language selection menu
+- `ask_platform`: Platform selection (delivery, ride-sharing)
+- `ask_shift`: Shift selection (morning, afternoon, evening)
+- `ask_upi`: UPI entry instruction
+- `ask_pincode`: Pincode entry instruction
+- `ask_plan`: Plan selection (bronze, silver, gold)
+- `onboarding_complete`: Confirmation with policy details
+
+**Alert Messages**:
+- `disruption_alert`: DCI-triggered alert with severity and guidance
+- `disruption_severe`: High DCI (>85) with precautions
+- `disruption_warning`: Moderate DCI (65-85) with tips
+
+**Payout Messages**:
+- `payout_sent`: Confirmation with amount and UPI
+- `payout_partial`: Partial payment notification
+- `payout_failed`: Failure reason and retry options
+- `payout_receipt`: Detailed receipt with reference number
+
+**Command Messages**:
+- `status_response`: Current DCI with severity tier
+- `renewal_success`: Policy renewed confirmation
+- `renewal_failed`: Renewal error message
+- `appeal_submitted`: Appeal filed confirmation
+- `help_message`: Available commands and usage
+
+**Error Messages**:
+- `invalid_upi`: UPI format error
+- `invalid_pincode`: Pincode validation error
+- `registration_failed`: Backend connection error
+- `api_error`: Generic API failure message
+
+**Each Message**:
+- Fully translated in all 5 languages
+- Supports template substitution: `{dci}`, `{amount}`, `{plan}`, `{policy_id}`, `{reference}`
+- Optimized for WhatsApp format (short paragraphs, emoji where appropriate)
+
+#### **`whatsapp-bot/utils/validators.js`** — Input Validation
+Client-side validation before backend calls:
+
+- **`validateUPI(upi)`**: Returns true if matches regex `^[a-zA-Z0-9._%-]+@[a-zA-Z]{3,}$`
+- **`validatePincode(pincode)`**: Returns true if 6 digits, valid Karnataka pincode
+- **`validatePhone(phone)`**: Returns true if 10 digits for Indian phone
+- **`validatePincodes(pincodes)`**: Array validator for 1-5 pincodes
+- **`validatePlan(plan)`**: Returns true if in ['bronze', 'silver', 'gold']
+- **`validatePlatform(platform)`**: Returns true if in ['delivery', 'ride-sharing']
+- **`validateShift(shift)`**: Returns true if in ['morning', 'afternoon', 'evening']
 
 ---
 
@@ -606,10 +870,12 @@ docker run -p 8000:8000 --env-file .env gigkavach-backend
 
 ## 🚀 Quick Start After Setup
 
+### **Backend + Frontend + WhatsApp Bot**
+
 ```bash
 # 1. Clone and install
 git clone https://github.com/VG2476/DEVTrails.git
-cd gigkavach
+cd DEVTrails
 pip install -r requirements.txt
 cd frontend && npm install && cd ..
 
@@ -620,19 +886,51 @@ cp .env.example .env
 # 3. Setup database
 python scripts/seed_database.py
 
-# 4. Run backend
-cd backend
-uvicorn main:app --reload --port 3000
+# 4. TERMINAL 1: Run WhatsApp Bot Service (Node.js, port 3001)
+cd whatsapp-bot
+npm install
+npm start
+# Scan QR code with WhatsApp on first run (use your personal phone)
+# Sessions persist in .wwebjs_auth/ and ./data/sessions/
 
-# 5. Run frontend (new terminal)
+# 5. TERMINAL 2: Run FastAPI Backend (port 8000, NOT 3001!)
+cd backend
+uvicorn main:app --reload --port 8000
+
+# 6. TERMINAL 3: Run Frontend (port 5173)
 cd frontend
 npm run dev
 
-# 6. Access
-# Backend: http://localhost:3000
+# 7. Access Services
+# Backend API: http://localhost:8000
+# Backend Docs: http://localhost:8000/docs
 # Frontend: http://localhost:5173
-# API Docs: http://localhost:3000/docs
+# WhatsApp Bot Health: http://localhost:3001/health
 ```
+
+### **Architecture Notes**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Frontend (Port 5173)                     │
+│                   React + TailwindCSS                        │
+└──────────────────────┬──────────────────────────────────────┘
+                       ↓
+┌─────────────────────────────────────────────────────────────┐
+│               Backend API (Port 8000)                        │
+│              FastAPI + Pydantic + Supabase                   │
+│         handles workers, policies, payouts, fraud            │
+└──────────┬──────────────────────────────────────┬────────────┘
+           ↓                                      ↓
+    ┌─────────────┐                  ┌────────────────────────┐
+    │  Supabase   │                  │  WhatsApp Bot (Port 3001)
+    │  Database   │                  │  Node.js + Express      │
+    │             │                  │  Manages worker comms   │
+    └─────────────┘                  │  Sessions + handlers    │
+                                     └────────────────────────┘
+```
+
+**Key Point**: WhatsApp Bot runs on port **3001**, Backend on port **8000**. Frontend calls Backend, Backend calls Bot service. They communicate via REST API (/api/v1/whatsapp/* endpoints).
 
 ---
 
