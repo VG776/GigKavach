@@ -101,3 +101,4 @@ whatsapp-bot/.wwebjs_auth/
 whatsapp-bot/.wwebjs_cache/
 nohup.out
 *.log
+whatsapp-bot/node_modules/
