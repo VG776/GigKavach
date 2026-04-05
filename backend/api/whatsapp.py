@@ -1,49 +1,17 @@
-# FastAPI WhatsApp webhook handler for Twilio
-from fastapi import APIRouter, Request, status, Depends
-from fastapi.responses import Response as FastAPIResponse
-import xml.etree.ElementTree as ET
+# FastAPI WhatsApp integration for whatsapp-web.js bot
+from fastapi import APIRouter, status
 import logging
 from datetime import datetime
 
 # Import handlers and utilities
 try:
-    from services.onboarding_handlers import route_message
     from services.whatsapp_service import notify_worker
 except ImportError as e:
     logger_init = logging.getLogger("gigkavach.whatsapp")
     logger_init.error(f"Failed to import handlers: {e}")
-    async def route_message(phone, body):
-        return "GigKavach Help: Type JOIN to register, STATUS to check coverage, or RENEW to extend."
 
 logger = logging.getLogger("gigkavach.whatsapp")
-router = APIRouter(tags=["WhatsApp Webhook"])
-
-@router.post("/whatsapp/webhook", status_code=status.HTTP_200_OK)
-async def whatsapp_webhook(request: Request):
-    """
-    Handles incoming WhatsApp messages from Twilio webhook.
-    Parses sender and message body, routes to appropriate handler.
-    """
-    form = await request.form()
-    sender = form.get("From", "")  # Twilio format: whatsapp:+1234567890
-    body = form.get("Body", "").strip()
-
-    # Extract phone number (remove whatsapp: prefix if present)
-    phone = sender.replace("whatsapp:", "") if "whatsapp:" in sender else sender
-    
-    logger.info(f"📨 Incoming message from {phone}: {body[:50]}")
-
-    # Route to appropriate handler
-    response_text = await route_message(phone, body)
-
-    # Build TwiML XML response
-    twiml = ET.Element("Response")
-    message = ET.SubElement(twiml, "Message")
-    message.text = response_text
-    xml_str = ET.tostring(twiml, encoding="utf-8")
-
-    logger.info(f"📤 Response to {phone}: {response_text[:50]}")
-    return FastAPIResponse(content=xml_str, media_type="application/xml")
+router = APIRouter(tags=["WhatsApp Integration"])
 
 def send_whatsapp_alert(worker_id: str, message_type: str, context: dict = None):
     """

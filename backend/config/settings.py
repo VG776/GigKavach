@@ -48,11 +48,8 @@ class Settings(BaseSettings):
     # ── Cache ────────────────────────────────────────────────────────────────
     REDIS_URL: str = "redis://localhost:6379/0"
 
-    # ── Twilio ───────────────────────────────────────────────────────
-    TWILIO_ACCOUNT_SID: str = ""
-    TWILIO_AUTH_TOKEN: str = ""
-    TWILIO_WHATSAPP_NUMBER: str = "whatsapp:+14155238886"
-    TWILIO_SMS_NUMBER: str = ""
+    # ── WhatsApp Bot ────────────────────────────────────
+    BOT_API_URL: str = ""  # Set to http://localhost:3001 or http://13.51.165.52:3001
 
     # ── Razorpay ─────────────────────────────────────────────────────
     RAZORPAY_KEY_ID: str = ""

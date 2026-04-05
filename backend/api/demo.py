@@ -58,36 +58,33 @@ def trigger_disruption_sync(factor: str, score: float):
     total_score = int(score) 
     
     try:
-        # A. Insert into dci_logs
+        # A. Insert into dci_logs  
         sb.table("dci_logs").insert({
             "pincode": DEMO_PINCODE,
             "total_score": total_score,
-            **components,
-            "severity_tier": "critical" if total_score >= 80 else "high",
+            "rainfall_score": 10,
+            "aqi_score": 10,
+            "heat_score": 10,
+            "social_score": 10,
+            "platform_score": 10,
+            "severity_tier": "catastrophic" if total_score >= 85 else ("moderate" if total_score >= 65 else "none"),
             "ndma_override_active": False,
-            "created_at": now
         }).execute()
         
-        # B. Insert into dci_events (This shows up in 'Active Zones')
-        sb.table("dci_events").insert({
-            "pin_code": DEMO_PINCODE,
-            "city": "Bengaluru",
-            "dci_score": total_score,
-            "severity": "critical" if total_score >= 80 else "high",
-            "disruption_types": [factor],
-            "triggered_at": now
-        }).execute()
+        logger.info(f"✅ Demo: Inserted DCI log with score {total_score} for pincode {DEMO_PINCODE}")
         
-        # C. Insert simulated Payout
-        sb.table("payouts").insert({
-            "worker_id": DEMO_WORKER_ID,
-            "dci_event_id": None, 
-            "final_amount": 450.0 + (score * 2),
-            "status": "completed",
-            "fraud_score": 0.05,
-            "triggered_at": now,
-            "created_at": now
-        }).execute()
+        # C. Insert simulated Payout (optional - don't fail if this fails)
+        try:
+            sb.table("payouts").insert({
+                "worker_id": DEMO_WORKER_ID,
+                "dci_event_id": None, 
+                "final_amount": 450.0 + (score * 2),
+                "status": "completed",
+                "fraud_score": 0.05,
+            }).execute()
+            logger.info(f"✅ Demo: Inserted payout for worker {DEMO_WORKER_ID}")
+        except Exception as pe:
+            logger.warning(f"Demo: Payout insert failed (non-critical): {pe}")
         
         return True
     except Exception as e:

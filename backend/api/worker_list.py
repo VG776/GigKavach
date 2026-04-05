@@ -2,7 +2,7 @@ from fastapi import APIRouter
 
 from utils.db import get_supabase
 
-router = APIRouter(prefix="/api/workers", tags=["Workers"])
+router = APIRouter(prefix="/workers", tags=["Workers"])
 
 
 @router.get("/")

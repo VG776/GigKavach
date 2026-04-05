@@ -1,22 +1,21 @@
 """
-utils/messaging.py — WhatsApp & SMS Notification Helper
-─────────────────────────────────────────────────────────
-Handles all outbound messages to workers via:
-  1. Twilio WhatsApp (primary channel)
-  2. Twilio SMS (fallback for workers without WhatsApp — edge case #23)
+services/whatsapp_service.py — WhatsApp Notification Helper
+─────────────────────────────────────────────────────────────
+Handles all outbound messages to workers via whatsapp-web.js bot API.
 
 All 30 worker-facing messages are stored in MESSAGES dict below in
 5 languages. No runtime translation API is used — all messages are
 pre-translated and stored statically (free, instant, reliable).
 
 Usage:
-    from utils.messaging import notify_worker
+    from services.whatsapp_service import notify_worker
     notify_worker("+919876543210", "disruption_alert", language="hi", dci=74, amount=280)
 """
 
-from twilio.rest import Client
+import httpx
 from config.settings import settings
 import logging
+import os
 
 logger = logging.getLogger("gigkavach.messaging")
 
@@ -150,30 +149,57 @@ MESSAGES: dict[str, dict[str, str]] = {
 }
 
 
-# ─── Twilio Client ────────────────────────────────────────────────────────────
+# ─── Bot API Configuration ───────────────────────────────────────────────────
 
-def get_twilio_client() -> Client:
-    """Returns configured Twilio client"""
-    return Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
+def get_bot_api_url() -> str:
+    """Get WhatsApp bot API base URL based on environment"""
+    # Support both localhost and server IP
+    bot_url = os.getenv("BOT_API_URL")
+    if bot_url:
+        return bot_url.rstrip("/")
+    
+    # Fallback to constructing from environment
+    if settings.APP_ENV == "production":
+        return "http://13.51.165.52:3001"
+    return "http://localhost:3001"
 
 
 # ─── Core Send Functions ─────────────────────────────────────────────────────
 
 def send_whatsapp(to_number: str, message: str) -> str | None:
     """
-    Sends a WhatsApp message via Twilio.
-    to_number should be in E.164 format: +919876543210
-    Returns Twilio message SID on success, None on failure.
+    Sends a WhatsApp message via whatsapp-bot API.
+    to_number should be in E.164 format or plain format: 919876543210 or +919876543210
+    Returns message ID on success, None on failure.
     """
     try:
-        client = get_twilio_client()
-        msg = client.messages.create(
-            from_=settings.TWILIO_WHATSAPP_NUMBER,          # whatsapp:+14155238886
-            to=f"whatsapp:{to_number}",
-            body=message
-        )
-        logger.info(f"WhatsApp sent to {to_number} | SID: {msg.sid}")
-        return msg.sid
+        # Clean phone number - remove + if present
+        clean_phone = to_number.lstrip("+")
+        
+        bot_api_url = get_bot_api_url()
+        
+        payload = {
+            "phone": clean_phone,
+            "message": message,
+            "messageType": "notification"
+        }
+        
+        with httpx.Client(timeout=10.0) as client:
+            response = client.post(
+                f"{bot_api_url}/send-message",
+                json=payload
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                logger.info(f"WhatsApp sent to {to_number} | Status: {data.get('status')}")
+                return data.get("status") == "success"
+            else:
+                logger.error(f"WhatsApp API error {response.status_code}: {response.text}")
+                return None
+    except httpx.RequestError as e:
+        logger.error(f"WhatsApp send failed to {to_number}: Network error - {e}")
+        return None
     except Exception as e:
         logger.error(f"WhatsApp send failed to {to_number}: {e}")
         return None
@@ -181,21 +207,11 @@ def send_whatsapp(to_number: str, message: str) -> str | None:
 
 def send_sms(to_number: str, message: str) -> str | None:
     """
-    SMS fallback for workers without WhatsApp (edge case #23).
-    Only for critical notifications: payout alerts and UPI failures.
+    SMS fallback - not available with whatsapp-web.js.
+    Returns None to indicate fallback not available.
     """
-    try:
-        client = get_twilio_client()
-        msg = client.messages.create(
-            from_=settings.TWILIO_SMS_NUMBER,
-            to=to_number,
-            body=message
-        )
-        logger.info(f"SMS sent to {to_number} | SID: {msg.sid}")
-        return msg.sid
-    except Exception as e:
-        logger.error(f"SMS send failed to {to_number}: {e}")
-        return None
+    logger.warn(f"SMS not available for {to_number} - WhatsApp Only")
+    return None
 
 
 # ─── High-Level Helper ───────────────────────────────────────────────────────

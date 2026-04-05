@@ -16,7 +16,7 @@ import httpx
 import logging
 
 logger = logging.getLogger("gigkavach.whatsapp_integration")
-router = APIRouter(prefix="/api/v1", tags=["WhatsApp Integration"])
+router = APIRouter(tags=["WhatsApp Integration"])
 
 # Bot service URL (running on port 3001)
 BOT_SERVICE_URL = "http://localhost:3001"

@@ -67,8 +67,6 @@ async def lifespan(app: FastAPI):
         logger.warning("⚠️  SUPABASE_URL not set — database operations will fail")
     if not settings.SUPABASE_ANON_KEY:
         logger.warning("⚠️  SUPABASE_ANON_KEY not set — authentication will fail")
-    if not settings.TWILIO_ACCOUNT_SID:
-        logger.warning("⚠️  TWILIO_ACCOUNT_SID not set — WhatsApp messages will fail")
     if not settings.TOMORROW_IO_API_KEY:
         logger.warning("⚠️  TOMORROW_IO_API_KEY not set — DCI weather component will use fallbacks")
 
@@ -154,7 +152,7 @@ Backend API for the GigKavach platform serving food delivery workers (Zomato/Swi
 
 ### Core Components
 - **DCI Engine** — Disruption Composite Index computed every 5 minutes per pin-code zone
-- **WhatsApp Webhook** — Twilio integration for worker onboarding and notifications
+- **WhatsApp Bot** — whatsapp-web.js integration for worker onboarding and notifications
 - **Payout Pipeline** — Razorpay UPI test mode payouts triggered automatically
 - **Fraud Detection** — Isolation Forest + 6-signal anti-spoofing layer
 
@@ -176,22 +174,28 @@ Backend API for the GigKavach platform serving food delivery workers (Zomato/Swi
 import os
 
 cors_origins = [
-    "http://localhost:3000",           # Local dev (serve frontend)
-    "http://localhost:5173",           # Local dev (Vite)
-    "http://127.0.0.1:3000",
-    "http://127.0.0.1:5173",
-    "http://13.51.165.52:3000",
+    # LOCAL DEVELOPMENT
+    "http://localhost:3000",           # Vite dev server (npm run dev)
+    "http://localhost:5173",           # Fallback Vite port
+    "http://127.0.0.1:3000",           # Localhost IPv4
+    "http://127.0.0.1:5173",           # Localhost IPv4 fallback
+    
+    # SERVER DEPLOYMENT
+    "http://13.51.165.52:3000",        # Production server
+    "http://13.51.165.52:5173",        # Production fallback
+    
+    # PRODUCTION (Vercel + Render)
+    "https://gigkavach-delta.vercel.app",
 ]
 
-# Add production/AWS URL from environment variable
+# Add production/AWS URLs from environment variables (if set)
 aws_frontend_url = os.getenv("FRONTEND_URL")
 if aws_frontend_url:
     cors_origins.append(aws_frontend_url)
 
-# Add AWS Amplify/Vercel URLs
-cors_origins.extend([
-    "https://gigkavach-delta.vercel.app",
-])
+frontend_server_url = os.getenv("FRONTEND_SERVER_URL")
+if frontend_server_url:
+    cors_origins.append(frontend_server_url)
 
 app.add_middleware(
     CORSMiddleware,

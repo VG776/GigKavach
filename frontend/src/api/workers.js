@@ -8,18 +8,18 @@ import apiClient from './client.js';
 export const workerAPI = {
   /**
    * Get all workers with pagination and filters.
-   * GET /api/v1/api/workers
+   * GET /api/v1/workers/
    */
   getAll: (params = {}) => {
-    return apiClient.get('/api/v1/api/workers', { params });
+    return apiClient.get('/api/v1/workers/', { params });
   },
 
   /**
    * Get single worker by ID with full profile details.
-   * GET /api/v1/api/workers/{worker_id}
+   * GET /api/v1/workers/{worker_id}
    */
   getById: (worker_id) => {
-    return apiClient.get(`/api/v1/api/workers/${worker_id}`);
+    return apiClient.get(`/api/v1/workers/${worker_id}`);
   },
 
   /**

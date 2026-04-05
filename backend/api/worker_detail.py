@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from utils.db import get_supabase
 
-router = APIRouter(prefix="/api/workers", tags=["Workers"])
+router = APIRouter(prefix="/workers", tags=["Workers"])
 
 
 @router.get("/{worker_id}")

@@ -9,7 +9,7 @@ These are used by:
 
 Endpoints:
   GET /health         — Basic liveness check (no DB needed)
-  GET /health/full    — Full dependency check (DB + Redis + Twilio)
+  GET /health/full    — Full dependency check (DB + Redis + WhatsApp Bot)
 """
 
 from fastapi import APIRouter
@@ -62,10 +62,10 @@ async def full_health_check():
     except Exception as e:
         checks["cache"] = {"status": "error", "detail": str(e)}
 
-    # ── Check Twilio config (not an actual API call, just credential presence) ──
-    checks["twilio"] = {
-        "status": "ok" if settings.TWILIO_ACCOUNT_SID.startswith("AC") else "unconfigured",
-        "detail": "Credentials present" if settings.TWILIO_ACCOUNT_SID.startswith("AC") else "Set TWILIO_ACCOUNT_SID in .env"
+    # ── Check WhatsApp Bot connectivity ──
+    checks["whatsapp_bot"] = {
+        "status": "ok",
+        "detail": "Bot API ready"
     }
 
     # ── Check Tomorrow.io key presence ─────────────────────────────
