@@ -165,6 +165,6 @@ The **Disruption Composite Index (DCI)** is built for zero-downtime:
 
 **Team Quadcore:**
 - **Varshit**: WhatsApp & API Integration Lead
-- **Vijeth**: Frontend & Dashboard Design
+- **Vijeth**: Frontend & Dashboard Design.
 - **V Saatwik**: ML Models & Fraud Detection Lead
 - **Sumukh Shandilya**: Backend & DCI Engine Architect
