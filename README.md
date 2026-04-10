@@ -22,7 +22,7 @@
 
 # 🚀 GigKavach
 
-**GigKavach** is an AI-powered parametric income protection platform designed for India's 10M+ gig workers (Zomato/Swiggy partners).
+**GigKavach** is an AI-powered parametric income protection platform designed for India's 10M+ gig workers (Zomato/Swiggy partners)..
 
 - **The Problem**: External disruptions (heavy rain, heatwaves, traffic gridlocks) can wipe out 20-30% of a worker's monthly income. Traditional insurance is too slow and complex.
 - **The Solution**: We automatically detect disruption events using a real-time **Disruption Composite Index (DCI)** at the pin-code level. 
