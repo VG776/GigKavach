@@ -33,7 +33,7 @@
 ## 🛠 2. Tech Stack
 
 **Frontend:**
-- React 19 (Vite), TypeScript, Tailwind CSS
+- React 19 (Vite), TypeScript, Tailwind CSS.
 - Leaflet.js (Maps), Recharts (Charts)
 
 **Backend (Python):**
