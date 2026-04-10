@@ -26,8 +26,8 @@ from sklearn.preprocessing import StandardScaler
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
-from backend.ml.generate_fraud_training_data import RealisticFraudDataGenerator
-from backend.ml.fraud_features_engineering import FraudFeaturesEngineer
+from ml.generate_fraud_training_data import RealisticFraudDataGenerator
+from ml.fraud_features_engineering import FraudFeaturesEngineer
 
 
 class FraudModelTrainer:

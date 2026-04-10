@@ -39,7 +39,7 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, PROJECT_ROOT)
 
-from backend.ml.feature_engineering import generate_synthetic_data, process_data
+from ml.feature_engineering import generate_synthetic_data, process_data
 MODELS_DIR = os.path.join(PROJECT_ROOT, "models", "v3")
 os.makedirs(MODELS_DIR, exist_ok=True)
 
