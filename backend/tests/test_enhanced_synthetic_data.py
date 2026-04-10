@@ -12,7 +12,7 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
-from backend.ml.feature_engineering import generate_synthetic_data
+from ml.feature_engineering import generate_synthetic_data
 import json
 
 # Generate enhanced synthetic data

@@ -17,9 +17,9 @@ from sklearn.model_selection import cross_val_score
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
-from backend.ml.generate_fraud_training_data import RealisticFraudDataGenerator
-from backend.ml.train_fraud_models import FraudModelTrainer
-from backend.ml.fraud_features_engineering import FraudFeaturesEngineer
+from ml.generate_fraud_training_data import RealisticFraudDataGenerator
+from ml.train_fraud_models import FraudModelTrainer
+from ml.fraud_features_engineering import FraudFeaturesEngineer
 
 
 class TestRealisticDataGeneration:

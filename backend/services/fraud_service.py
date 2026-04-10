@@ -11,7 +11,7 @@ from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
-from backend.ml.fraud_detector import get_detector
+from ml.fraud_detector import get_detector
 
 # Configure logging
 logging.basicConfig(

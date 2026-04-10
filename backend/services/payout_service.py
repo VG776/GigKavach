@@ -20,7 +20,7 @@ import logging
 from typing import Dict, Optional
 from datetime import datetime
 
-from backend.ml.xgboost_loader import (
+from ml.xgboost_loader import (
     extract_features,
     predict_multiplier,
     predict_with_confidence,
