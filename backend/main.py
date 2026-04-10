@@ -212,24 +212,21 @@ if settings.APP_ENV == "production":
         cors_origins.append(settings.FRONTEND_PRODUCTION_URL)
     
     # Additional production origins from env
-    aws_frontend_url = os.getenv("AWS_FRONTEND_URL")
-    if aws_frontend_url:
-        cors_origins.append(aws_frontend_url)
-    
-    vercel_url = os.getenv("VERCEL_URL")
-    if vercel_url:
-        cors_origins.append(f"https://{vercel_url}")
+    vercel_frontend_url = os.getenv("VERCEL_URL")
+    if vercel_frontend_url:
+        cors_origins.append(f"https://{vercel_frontend_url}")
 else:
-    # Development/staging — also allow server IP (for local network testing)
-    # These can be overridden by env variables
+    # Development/staging — allow configured dev server URLs
+    # Support Docker Compose and local development networks
     dev_server_url = os.getenv("DEV_SERVER_URL")
     if dev_server_url:
         cors_origins.append(dev_server_url)
-    else:
-        # Add some common dev server IPs for local testing
+    
+    # Support Docker Compose internal hostname
+    if os.getenv("DOCKER_COMPOSE_ENV"):
         cors_origins.extend([
-            "http://13.51.165.52:3000",        # Common dev server IP
-            "http://13.51.165.52:5173",        # Fallback port
+            "http://frontend:5173",        # Docker Compose service name
+            "http://frontend:3000",        # Alternative Vite port
         ])
 
 logger.debug(f"CORS Origins configured: {cors_origins}")
