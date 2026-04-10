@@ -3,14 +3,13 @@ from fastapi import APIRouter, status
 import logging
 from datetime import datetime
 
+logger = logging.getLogger("gigkavach.whatsapp")
+
 # Import handlers and utilities
 try:
     from services.whatsapp_service import notify_worker
 except ImportError as e:
-    logger_init = logging.getLogger("gigkavach.whatsapp")
-    logger_init.error(f"Failed to import handlers: {e}")
-
-logger = logging.getLogger("gigkavach.whatsapp")
+    logger.error(f"Failed to import handlers: {e}")
 router = APIRouter(tags=["WhatsApp Integration"])
 
 def send_whatsapp_alert(worker_id: str, message_type: str, context: dict = None):

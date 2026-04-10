@@ -1,6 +1,8 @@
 from fastapi import APIRouter, HTTPException
 from utils.db import get_supabase
+import logging
 
+logger = logging.getLogger("gigkavach.worker_detail")
 router = APIRouter(prefix="/workers", tags=["Workers"])
 
 
@@ -130,5 +132,5 @@ def get_worker_detail(worker_id: str):
     except HTTPException:
         raise
     except Exception as err:
-        print(f"Worker Detail API Error: {err}")
+        logger.error(f"Worker Detail API Error: {err}")
         raise HTTPException(status_code=500, detail="Internal server error")
