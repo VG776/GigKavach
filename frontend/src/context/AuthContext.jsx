@@ -49,46 +49,83 @@ export const AuthProvider = ({ children }) => {
   };
 
   useEffect(() => {
+    // Flag to prevent state updates after unmount
+    let isMounted = true;
+    let loadingTimeout; // Safety timeout to prevent infinite loading state
+
     // Check for existing session on mount
     const initializeAuth = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        setSession(session);
-        setUser(session?.user ?? null);
-        setIsAuthenticated(!!session);
         
-        // Fetch user profile if session exists
-        if (session?.user) {
-          const profile = await fetchUserProfile(session.user.id);
-          setUserProfile(profile);
+        if (isMounted) {
+          setSession(session);
+          setUser(session?.user ?? null);
+          setIsAuthenticated(!!session);
+          
+          // Fetch user profile if session exists
+          if (session?.user) {
+            const profile = await fetchUserProfile(session.user.id);
+            if (isMounted) {
+              setUserProfile(profile);
+            }
+          }
         }
       } catch (error) {
         console.error('Auth initialization error:', error);
+        // Even on error, continue (allow access without profile)
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
+
+    // Safety timeout - ensure loading is cleared after 3 seconds
+    loadingTimeout = setTimeout(() => {
+      if (isMounted && loading) {
+        console.warn('Auth loading timeout - clearing loading state');
+        setLoading(false);
+      }
+    }, 3000);
 
     initializeAuth();
 
     // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        setIsAuthenticated(!!session);
-        
-        // Fetch profile when auth state changes
-        if (session?.user) {
-          const profile = await fetchUserProfile(session.user.id);
-          setUserProfile(profile);
-        } else {
-          setUserProfile(null);
+        if (isMounted) {
+          setSession(session);
+          setUser(session?.user ?? null);
+          setIsAuthenticated(!!session);
+          
+          // Fetch profile when auth state changes
+          if (session?.user) {
+            const profile = await fetchUserProfile(session.user.id);
+            if (isMounted) {
+              setUserProfile(profile);
+            }
+          } else {
+            setUserProfile(null);
+          }
+          
+          // Ensure loading is cleared when auth state changes
+          if (isMounted) {
+            setLoading(false);
+          }
         }
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      if (subscription) {
+        subscription.unsubscribe();
+      }
+      if (loadingTimeout) {
+        clearTimeout(loadingTimeout);
+      }
+    };
   }, []);
 
   const login = async (email, password) => {

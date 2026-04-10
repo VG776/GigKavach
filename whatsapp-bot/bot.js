@@ -20,6 +20,7 @@ import { dirname } from 'path';
 import { execSync } from 'child_process';
 import { routeMessage } from './services/message-handler.js';
 import SessionManager from './services/session-manager.js';
+import { messageQueue } from './services/message-queue.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -142,13 +143,42 @@ client.on('disconnected', (reason) => {
   log.info('Attempting to reconnect...');
 });
 
+// ═════════════════════════════════════════════════════════════════
+// Message Queue Processor
+// ═════════════════════════════════════════════════════════════════
 /**
- * Ready Event - bot is fully connected
+ * Process queued messages with exponential backoff retry
+ * Runs every 5 seconds to check for pending messages
  */
+async function processMessageQueue() {
+  try {
+    const item = messageQueue.getNext();
+    if (!item) return; // No pending messages
+
+    try {
+      const phoneFormatted = `${item.phoneNumber}@c.us`;
+      await client.sendMessage(phoneFormatted, item.messageBody);
+      messageQueue.markSent(item.id);
+      log.success(`[QUEUE SENT] ${item.phoneNumber}: ${item.metadata.type || 'message'}`);
+    } catch (error) {
+      messageQueue.markForRetry(item.id, error);
+      log.warn(`[QUEUE RETRY] ${item.phoneNumber}: ${error.message}`);
+    }
+  } catch (error) {
+    log.error(`Queue processor error: ${error.message}`);
+  }
+}
+
+// Start queue processor after bot initializes
+let queueProcessorInterval;
 client.on('ready', () => {
   log.success('WhatsApp bot is ready and listening for messages!');
   log.info(`Backend URL: ${BACKEND_URL}`);
   log.info(`Bot API listening on port ${PORT}`);
+  
+  // Start processing queued messages
+  queueProcessorInterval = setInterval(processMessageQueue, 5000);
+  log.info('Message queue processor started (5s intervals)');
 });
 
 /**
@@ -217,6 +247,9 @@ app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
 /**
  * POST /send-message
  * Backend → Bot: Send a message to a specific worker
+ * 
+ * Uses message queue with exponential backoff retry for reliability.
+ * If message fails to send, it will be retried automatically.
  *
  * Body: { phone: "919876543210", message: "Your content", messageType: "alert|confirmation|etc" }
  */
@@ -231,15 +264,19 @@ app.post('/send-message', async (req, res) => {
       });
     }
 
-    const phoneFormatted = `${phone}@c.us`;
-    await client.sendMessage(phoneFormatted, message);
+    // Enqueue message for sending (with automatic retry)
+    const queueItem = await messageQueue.enqueue(phone, message, {
+      type: messageType || 'message',
+      backend_request: new Date().toISOString(),
+    });
 
-    log.info(`[OUTBOUND] ${messageType || 'message'} to ${phone}`);
+    log.info(`[QUEUE] Message enqueued for ${phone} (ID: ${queueItem.id})`);
 
     return res.json({
       status: 'success',
       phone,
       messageType,
+      queue_id: queueItem.id,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
@@ -436,14 +473,65 @@ app.get('/health', (req, res) => {
 app.get('/stats', (req, res) => {
   const sessions = SessionManager.getAllSessions();
   const activeSessions = Object.values(sessions).filter((s) => s.status === 'active').length;
+  const queueStats = messageQueue.getStats();
 
   return res.json({
     status: 'ok',
     total_sessions: Object.keys(sessions).length,
     active_sessions: activeSessions,
+    queue: queueStats,
     uptime_seconds: process.uptime(),
     timestamp: new Date().toISOString(),
   });
+});
+
+/**
+ * GET /queue/status
+ * Message queue status and stats
+ */
+app.get('/queue/status', (req, res) => {
+  const stats = messageQueue.getStats();
+  return res.json({
+    status: 'ok',
+    queue: stats,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+/**
+ * GET /queue/dead-letters
+ * Get permanently failed messages (dead letter queue)
+ */
+app.get('/queue/dead-letters', (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+  const deadLetters = messageQueue.getDeadLetters(limit);
+  return res.json({
+    status: 'ok',
+    count: deadLetters.length,
+    messages: deadLetters,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+/**
+ * DELETE /queue/dead-letter/:messageId
+ * Remove a message from dead letter queue (allow manual recovery if message was false positive)
+ */
+app.delete('/queue/dead-letter/:messageId', (req, res) => {
+  const { messageId } = req.params;
+  try {
+    messageQueue.clearDeadLetter(messageId);
+    return res.json({
+      status: 'ok',
+      message: `Dead letter ${messageId} cleared`,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    return res.status(500).json({
+      status: 'error',
+      message: error.message,
+    });
+  }
 });
 
 // ═════════════════════════════════════════════════════════════════
@@ -472,6 +560,13 @@ client.initialize();
 
 process.on('SIGINT', async () => {
   log.warn('\n\nShutting down gracefully...');
+  
+  // Stop queue processor
+  if (queueProcessorInterval) {
+    clearInterval(queueProcessorInterval);
+    log.info('Message queue processor stopped');
+  }
+  
   try {
     await client.destroy();
     log.success('WhatsApp client destroyed');
@@ -483,6 +578,13 @@ process.on('SIGINT', async () => {
 
 process.on('SIGTERM', async () => {
   log.warn('\n\nTermination signal received. Shutting down...');
+  
+  // Stop queue processor
+  if (queueProcessorInterval) {
+    clearInterval(queueProcessorInterval);
+    log.info('Message queue processor stopped');
+  }
+  
   try {
     await client.destroy();
     log.success('WhatsApp client destroyed');

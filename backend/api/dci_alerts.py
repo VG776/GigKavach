@@ -3,7 +3,7 @@ DCI Alerts API
 Returns latest high-severity DCI events (score > 65)
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, status
 from config.settings import settings
 from utils.supabase_client import get_supabase
 import logging
@@ -59,4 +59,8 @@ async def get_latest_dci_alerts(limit: int = 3):
         }
 
     except Exception as e:
-        return {"error": str(e)}
+        logger.error(f"Failed to fetch DCI alerts: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch DCI alerts"
+        )

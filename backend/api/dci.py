@@ -6,10 +6,11 @@ Includes current breakdown and historical trends fetched from Redis and Supabase
 """
 
 from fastapi import APIRouter, HTTPException, Depends
-from typing import Dict, Any
+from typing import Dict, Any, List
 import datetime
 import json
 import asyncio
+from pydantic import BaseModel
 
 from utils.redis_client import get_redis
 from utils.supabase_client import get_supabase
@@ -80,8 +81,7 @@ async def get_dci_status(pincode: str):
         "current": current_data,
         "history_24h": condensed_history
     }
-from typing import List
-from pydantic import BaseModel
+
 
 class LatestDCIAlert(BaseModel):
     pincode: str
@@ -128,7 +128,8 @@ async def get_latest_high_dci_alerts():
                 if len(alerts) == 4:  # ✅ only 4
                     break
 
-            except:
+            except Exception as e:
+                logger.warning(f"Failed to parse DCI alert row: {e}")
                 continue
 
         return alerts

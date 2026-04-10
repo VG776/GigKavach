@@ -1,7 +1,9 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, status
 from datetime import datetime, timezone
 from utils.db import get_supabase
+import logging
 
+logger = logging.getLogger("gigkavach.workers_dashboard")
 router = APIRouter()
 
 @router.get("/workers/active/week")
@@ -27,7 +29,8 @@ async def get_active_workers_week():
         }
 
     except Exception as e:
-        return {
-            "active_workers_week": 0,
-            "error": str(e)
-        }
+        logger.error(f"Failed to fetch active workers: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch active workers"
+        )

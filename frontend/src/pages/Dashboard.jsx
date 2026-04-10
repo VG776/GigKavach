@@ -4,6 +4,7 @@ import { payoutAPI } from '../api/payouts';
 import { dciAPI } from '../api/dci';
 import { workerAPI } from '../api/workers';
 import { DCIChart } from '../components/dci/DCIChart';
+import { logger } from '../utils/logger';
 
 
 
@@ -42,18 +43,26 @@ import { DCIChart } from '../components/dci/DCIChart';
 */
 export const Dashboard = () => {
   // Recent Payouts
-const defaultSpark = [40, 60, 30, 90, 70, 110, 80];
-const [recentPayouts, setRecentPayouts] = useState([]);
+  const defaultSpark = [40, 60, 30, 90, 70, 110, 80];
+  const [recentPayouts, setRecentPayouts] = useState([]);
+  
   useEffect(() => {
     const fetchPayouts = async () => {
       try {
         console.log('[PAYOUTS] Fetching...');
-        const res = await payoutAPI.getAll({ limit: 3 });
+        const res = await payoutAPI.getAll({ limit: 3 }).catch(err => {
+          console.warn('[PAYOUTS] API call failed (expected in test mode):', err.message);
+          return { payouts: [] }; // Return empty array instead of throwing
+        });
         
-        console.log('[PAYOUTS] Response:', res);
-
-        // Handle both response formats
-        const payoutsData = res.payouts || res.data || [];
+        logger.debug('PAYOUTS', 'Response:', res);
+        const payoutsData = res?.payouts || res?.data || [];
+        
+        if (payoutsData.length === 0) {
+          logger.debug('PAYOUTS', 'No payouts yet, showing placeholders');
+          setRecentPayouts([]);
+          return;
+        }
         
         const formatted = payoutsData.map((p) => ({
           id: p.id,
@@ -70,33 +79,42 @@ const [recentPayouts, setRecentPayouts] = useState([]);
           timestamp: timeAgo(p.timestamp || p.created_at || new Date()),
         }));
 
-        console.log('[PAYOUTS] Formatted:', formatted);
+        logger.debug('PAYOUTS', 'Formatted:', formatted);
         setRecentPayouts(formatted);
       } catch (err) {
         console.error('[PAYOUTS] Error:', err);
+        setRecentPayouts([]); // Show empty state instead of hanging
       }
     };
 
-    fetchPayouts();
+    // Add timeout to prevent hanging
+    const timer = setTimeout(fetchPayouts, 500);
+    return () => clearTimeout(timer);
   }, []);
 
-const [activeZones, setActiveZones] = useState([]);
-const [loading, setLoading] = useState(true);
+  const [activeZones, setActiveZones] = useState([]);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const fetchZones = async () => {
       try {
         setLoading(true);
-        console.log('[DCI_ALERTS] Fetching...');
+        logger.debug('DCI_ALERTS', 'Fetching latest alerts...');
         
-        const res = await dciAPI.getLatestAlerts(3);
+        const res = await Promise.race([
+          dciAPI.getLatestAlerts(3),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Timeout')), 3000)
+          )
+        ]).catch(err => {
+          console.warn('[DCI_ALERTS] Failed or timed out (expected in test mode):', err.message);
+          return { alerts: [] };
+        });
         
-        console.log('[DCI_ALERTS] Response:', res);
-        
-        const alertsData = res.alerts || res.data || [];
+        logger.debug('DCI_ALERTS', 'Response:', res);
+        const alertsData = res?.alerts || res?.data || [];
         setActiveZones(alertsData);
-        
-        console.log('[DCI_ALERTS] Set zones:', alertsData);
+        logger.debug('DCI_ALERTS', 'Set zones:', alertsData);
       } catch (err) {
         console.error('[DCI_ALERTS] Error:', err);
         setActiveZones([]);
@@ -105,7 +123,8 @@ const [loading, setLoading] = useState(true);
       }
     };
 
-    fetchZones();
+    const timer = setTimeout(fetchZones, 500);
+    return () => clearTimeout(timer);
   }, []);
 
 
@@ -134,35 +153,48 @@ const sparkline = {
 };
 
 const [todayPayout, setTodayPayout] = useState(0);
-const [loadingPayout, setLoadingPayout] = useState(true);
+const [loadingPayout, setLoadingPayout] = useState(false);
 const [todayDCI, setTodayDCI] = useState(0);
 const [activeWorkers, setActiveWorkers] = useState(0);
+
   useEffect(() => {
     const fetchDCI = async () => {
       try {
-        const res = await dciAPI.getTodayTotal();
-        setTodayDCI(res.total_dci_today ?? 0);
+        const res = await Promise.race([
+          dciAPI.getTodayTotal(),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Timeout')), 2000)
+          )
+        ]);
+        setTodayDCI(res?.total_dci_today ?? 0);
       } catch (err) {
-        console.error(err);
+        console.warn('[DCI] Failed to fetch today total:', err.message);
         setTodayDCI(0);
       }
     };
 
-    fetchDCI();
+    const timer = setTimeout(fetchDCI, 300);
+    return () => clearTimeout(timer);
   }, []);
 
   useEffect(() => {
     const fetchWorkers = async () => {
       try {
-        const res = await workerAPI.getActiveWeekCount();
-        setActiveWorkers(res.active_workers_week ?? 0);
+        const res = await Promise.race([
+          workerAPI.getActiveWeekCount(),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Timeout')), 2000)
+          )
+        ]);
+        setActiveWorkers(res?.active_workers_week ?? 0);
       } catch (err) {
-        console.error(err);
+        console.warn('[WORKERS] Failed to fetch count:', err.message);
         setActiveWorkers(0);
       }
     };
 
-    fetchWorkers();
+    const timer = setTimeout(fetchWorkers, 300);
+    return () => clearTimeout(timer);
   }, []);
 
 
@@ -201,15 +233,21 @@ const statCards = [
   useEffect(() => {
     const fetchPayoutTotal = async () => {
       try {
-        const res = await payoutAPI.getTodayTotal();
-        setTodayPayout(res.total_payout_today ?? 0);
+        const res = await Promise.race([
+          payoutAPI.getTodayTotal(),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Timeout')), 2000)
+          )
+        ]);
+        setTodayPayout(res?.total_payout_today ?? 0);
       } catch (err) {
-        console.error(err);
+        console.warn('[PAYOUTS] Failed to fetch today total:', err.message);
         setTodayPayout(0);
       }
     };
 
-    fetchPayoutTotal();
+    const timer = setTimeout(fetchPayoutTotal, 300);
+    return () => clearTimeout(timer);
   }, []);
 
   const getCardBgColor = (color) => {
