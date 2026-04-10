@@ -1,0 +1,166 @@
+version: '3.9'
+
+services:
+  # Redis Cache Service
+  redis:
+    image: redis:7-alpine
+    container_name: gigkavach-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - gigkavach-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend Service (FastAPI + Uvicorn)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ../Dockerfile
+    container_name: gigkavach-backend
+    ports:
+      - "8000:8000"
+    environment:
+      # Use environment variables from .env file
+      APP_ENV: development
+      PYTHON_VERSION: 3.11
+      
+      # Supabase Configuration (from backend/.env)
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      
+      # Redis Configuration
+      REDIS_URL: redis://redis:6379/0
+      
+      # Razorpay Configuration
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET}
+      
+      # Weather & Data APIs
+      TOMORROW_IO_API_KEY: ${TOMORROW_IO_API_KEY}
+      AQICN_API_TOKEN: ${AQICN_API_TOKEN}
+      OPENAQ_API_KEY: ${OPENAQ_API_KEY}
+      
+      # Frontend Configuration
+      FRONTEND_LOCAL_URL: http://localhost:5173
+      FRONTEND_PRODUCTION_URL: http://localhost:5173
+      
+      # DCI Configuration
+      DCI_POLL_INTERVAL_SECONDS: "300"
+      DCI_TRIGGER_THRESHOLD: "65"
+      DCI_CATASTROPHIC_THRESHOLD: "85"
+    
+    volumes:
+      # Mount entire backend directory for hot-reload
+      - ./backend:/app
+      # Mount logs directory
+      - ./backend/logs:/app/logs
+      # Exclude Python cache
+      - /app/__pycache__
+      - /app/.pytest_cache
+    
+    depends_on:
+      redis:
+        condition: service_healthy
+    
+    networks:
+      - gigkavach-network
+    
+    # Auto-restart on code changes (requires watchdog)
+    command: >
+      sh -c "pip install watchdog &&
+      watchmedo auto-restart -d /app -p '*.py' -R -- 
+      uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Frontend Service (Vite Dev Server)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: ../Dockerfile
+    container_name: gigkavach-frontend
+    ports:
+      - "5173:5173"
+      - "3000:3000"  # Alternative port option
+    
+    environment:
+      # Backend API configuration for development
+      VITE_API_URL: http://localhost:8000
+      VITE_API_BASE_URL: http://localhost:8000
+      VITE_WS_BASE_URL: ws://localhost:8000
+      
+      # Supabase Configuration (from frontend/.env)
+      VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
+      VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
+      
+      # Feature flags
+      VITE_ENABLE_MOCK_DATA: "false"
+      VITE_DEBUG_MODE: "true"
+      
+      # Vite configuration
+      VITE_HOST: 0.0.0.0
+    
+    volumes:
+      # Mount entire frontend directory for hot-reload
+      - ./frontend:/app
+      # Exclude node_modules from bind mount for performance
+      - /app/node_modules
+      # Exclude dist build artifacts
+      - /app/dist
+    
+    depends_on:
+      - backend
+    
+    networks:
+      - gigkavach-network
+    
+    # Watch for file changes and auto-rebuild
+    command: npm run dev
+
+  # Optional: WhatsApp Bot Service (if deploying locally)
+  # Uncomment to include WhatsApp bot in docker-compose workflow
+  # whatsapp-bot:
+  #   build:
+  #     context: ./whatsapp-bot
+  #     dockerfile: ../Dockerfile
+  #   container_name: gigkavach-whatsapp-bot
+  #   ports:
+  #     - "3001:3001"
+  #   environment:
+  #     BACKEND_URL: http://backend:8000
+  #     BOT_PORT: 3001
+  #     DEBUG: "true"
+  #     LOG_LEVEL: debug
+  #     SESSION_DIR: ./sessions
+  #   volumes:
+  #     - ./whatsapp-bot:/app
+  #     - /app/node_modules
+  #     - whatsapp_sessions:/app/sessions
+  #   depends_on:
+  #     - backend
+  #   networks:
+  #     - gigkavach-network
+
+# Named volumes for data persistence
+volumes:
+  redis_data:
+    driver: local
+  # whatsapp_sessions:
+  #   driver: local
+
+# Docker network for inter-service communication
+networks:
+  gigkavach-network:
+    driver: bridge

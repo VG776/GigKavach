@@ -49,7 +49,8 @@ class Settings(BaseSettings):
     REDIS_URL: str = "redis://localhost:6379/0"
 
     # ── WhatsApp Bot ────────────────────────────────────
-    BOT_API_URL: str = ""  # Set to http://localhost:3001 or http://13.51.165.52:3001
+    # Set via environment variable: http://localhost:3001 (dev) or Render URL (prod)
+    BOT_API_URL: str = ""
 
     # ── Razorpay ─────────────────────────────────────────────────────
     RAZORPAY_KEY_ID: str = ""
