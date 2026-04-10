@@ -33,12 +33,12 @@ import logging
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
 
-from backend.ml.xgboost_loader import (
+from ml.xgboost_loader import (
     extract_features,
     predict_with_confidence,
     load_metadata
 )
-from backend.services.payout_service import calculate_payout
+from services.payout_service import calculate_payout
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)

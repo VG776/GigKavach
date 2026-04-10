@@ -17,10 +17,10 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from apscheduler.triggers.cron import CronTrigger
 
-from backend.cron.dci_poller import process_zone
-from backend.cron.claims_trigger import trigger_claims_pipeline
-from backend.cron.rss_parser import parse_feeds
-from backend.config.settings import settings
+from cron.dci_poller import process_zone
+from cron.claims_trigger import trigger_claims_pipeline
+from cron.rss_parser import parse_feeds
+from config.settings import settings
 
 logger = logging.getLogger("gigkavach.scheduler")
 
