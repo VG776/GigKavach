@@ -1,0 +1,23 @@
+{
+  "model_name": "GigKavach_Dynamic_Premium_HGB_v1",
+  "objective": "poisson",
+  "created_at": "2026-04-11T19:18:43.651411",
+  "features": [
+    "worker_gig_score",
+    "pincode_30d_avg_dci",
+    "predicted_7d_max_dci",
+    "shift_morning",
+    "shift_day",
+    "shift_night",
+    "shift_flexible"
+  ],
+  "metrics": {
+    "test_r2": 0.8839747482938091,
+    "test_mae": 0.021964669709878072,
+    "test_rmse": 0.028902753397833252
+  },
+  "business_bounds": {
+    "min_discount": 0.0,
+    "max_discount": 0.3
+  }
+}

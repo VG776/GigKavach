@@ -118,6 +118,11 @@ async def run_daily_settlement():
                     f"Amount: ₹{payout_amount:.2f}"
                 )
                 settled_count += 1
+                
+                # INTEGRATION: Reward valid severe claims
+                if d_score > 85:
+                    from services.gigscore_service import update_gig_score, GigScoreEvent
+                    update_gig_score(worker_id, GigScoreEvent.VALID_SEVERE_CLAIM, {"dci": d_score})
 
                 # 7. Trigger WhatsApp settlement alert
                 try:
