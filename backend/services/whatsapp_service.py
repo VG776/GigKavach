@@ -153,14 +153,17 @@ MESSAGES: dict[str, dict[str, str]] = {
 
 def get_bot_api_url() -> str:
     """Get WhatsApp bot API base URL based on environment"""
-    # Support both localhost and server IP
+    # Support both localhost and server IP via environment variable
     bot_url = os.getenv("BOT_API_URL")
     if bot_url:
         return bot_url.rstrip("/")
     
-    # Fallback to constructing from environment
+    # Fallback based on environment
     if settings.APP_ENV == "production":
-        return "http://13.51.165.52:3001"
+        # TODO: Set BOT_API_URL environment variable in Render dashboard
+        # Format: https://your-whatsapp-bot-deployment.onrender.com or similar
+        # For now, returns localhost (should be configured)
+        return os.getenv("BOT_API_URL", "http://localhost:3001")
     return "http://localhost:3001"
 
 
