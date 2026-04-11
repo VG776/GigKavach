@@ -11,6 +11,7 @@ import { Analytics } from './pages/Analytics';
 import Login from './pages/Login';
 import ProtectedRoute from './components/ProtectedRoute';
 import { JudgeConsole } from './components/demo/JudgeConsole';
+import { API_CONFIG } from './utils/constants';
 
 // Protected Layout wrapper
 const ProtectedLayout = ({ children }) => {
@@ -55,6 +56,8 @@ const DashboardLayout = () => {
 };
 
 export default function App() {
+  const [backendReady, setBackendReady] = useState(false);
+  const [backendStatus, setBackendStatus] = useState('Connecting to backend...');
 
   // Initialize dark mode from localStorage
   useEffect(() => {
@@ -63,6 +66,67 @@ export default function App() {
       document.documentElement.classList.add('dark');
     }
   }, []);
+
+  // Gate the app until backend is actually reachable.
+  useEffect(() => {
+    let cancelled = false;
+    let retryTimerId;
+
+    const checkBackend = async () => {
+      let isBackendUp = false;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+
+      try {
+        const response = await fetch(`${API_CONFIG.BASE_URL}/api/v1/health/`, {
+          method: 'GET',
+          signal: controller.signal,
+          cache: 'no-store',
+        });
+
+        if (response.ok) {
+          isBackendUp = true;
+          if (!cancelled) {
+            setBackendReady(true);
+            setBackendStatus('Backend is ready.');
+          }
+        } else if (!cancelled) {
+          setBackendStatus(`Waiting for backend... (status ${response.status})`);
+        }
+      } catch {
+        if (!cancelled) {
+          setBackendStatus('Waiting for backend service to start...');
+        }
+      } finally {
+        clearTimeout(timeoutId);
+        if (!cancelled && !isBackendUp) {
+          retryTimerId = setTimeout(checkBackend, 2000);
+        }
+      }
+    };
+
+    checkBackend();
+
+    return () => {
+      cancelled = true;
+      if (retryTimerId) {
+        clearTimeout(retryTimerId);
+      }
+    };
+  }, []);
+
+  if (!backendReady) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gigkavach-navy via-gigkavach-navy-light to-gigkavach-navy text-white px-6">
+        <div className="text-center max-w-md">
+          <div className="mx-auto mb-6 h-12 w-12 rounded-full border-4 border-white/25 border-t-gigkavach-orange animate-spin" />
+          <h1 className="text-2xl font-bold tracking-tight mb-2">Starting GigKavach</h1>
+          <p className="text-gray-300">{backendStatus}</p>
+          <p className="text-gray-400 text-sm mt-3">The app will open automatically once the backend responds.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <Routes>
