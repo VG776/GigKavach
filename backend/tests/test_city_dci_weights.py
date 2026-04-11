@@ -246,6 +246,10 @@ class TestPincodeToCity:
         # strip() is applied internally
         assert resolve_city_from_pincode("  400001  ") == "Mumbai"
 
+    def test_bengaluru_prefix_fallback(self):
+        # Prefix fallback should resolve valid but unlisted Bengaluru pincodes.
+        assert resolve_city_from_pincode("560999") == "Bengaluru"
+
 
 # ─── TestGlobalFallback ───────────────────────────────────────────────────────
 

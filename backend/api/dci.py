@@ -137,61 +137,6 @@ class RecomputeResponse(BaseModel):
 
 # ─── Routes ───────────────────────────────────────────────────────────────────
 
-@router.get("/dci/{pincode}", response_model=Dict[str, Any])
-async def get_dci_status(pincode: str):
-    """
-    Returns the current DCI score breakdown and 24h historical data for a pincode.
-
-    Response includes:
-      - current: Full latest DCI data with city + weights_used fields
-      - history_24h: Condensed time-series for charts
-      - city: Resolved city for this pincode
-      - weights: City-specific weights applied to this zone
-
-    Raises 404 if the poller has not yet run for this zone.
-    """
-    rc = await get_redis()
-
-    cache_key = f"dci:score:{pincode}"
-    current_raw = await rc.get(cache_key)
-
-    if not current_raw:
-        raise HTTPException(
-            status_code=404,
-            detail=(
-                f"No active DCI data for pin code {pincode}. "
-                f"Ensure the cron poller is tracking this zone."
-            ),
-        )
-
-    current_data = json.loads(current_raw)
-
-    # Fetch history in a thread to keep event loop free
-    history_data = await asyncio.to_thread(fetch_history_sync, pincode)
-
-    condensed_history = [
-        {
-            "timestamp": row["created_at"],
-            "score":     row["total_score"],
-            "severity":  row["severity_tier"],
-            "city":      row.get("city", "default"),
-        }
-        for row in history_data
-    ]
-
-    # Resolve city for the response envelope (may already be in cache)
-    city = current_data.get("city") or resolve_city_from_pincode(pincode)
-    weights = get_city_weights(city)
-
-    return {
-        "pincode":    pincode,
-        "city":       city,
-        "weights":    weights,
-        "current":    current_data,
-        "history_24h": condensed_history,
-    }
-
-
 @router.get("/dci/latest-alerts", response_model=List[LatestDCIAlert])
 async def get_latest_high_dci_alerts():
     """
@@ -456,3 +401,58 @@ async def recompute_weights(
         updated_weights=result["weights"],
         timestamp=datetime.datetime.now(datetime.timezone.utc).isoformat()
     )
+
+
+@router.get("/dci/{pincode}", response_model=Dict[str, Any])
+async def get_dci_status(pincode: str):
+    """
+    Returns the current DCI score breakdown and 24h historical data for a pincode.
+
+    Response includes:
+      - current: Full latest DCI data with city + weights_used fields
+      - history_24h: Condensed time-series for charts
+      - city: Resolved city for this pincode
+      - weights: City-specific weights applied to this zone
+
+    Raises 404 if the poller has not yet run for this zone.
+    """
+    rc = await get_redis()
+
+    cache_key = f"dci:score:{pincode}"
+    current_raw = await rc.get(cache_key)
+
+    if not current_raw:
+        raise HTTPException(
+            status_code=404,
+            detail=(
+                f"No active DCI data for pin code {pincode}. "
+                f"Ensure the cron poller is tracking this zone."
+            ),
+        )
+
+    current_data = json.loads(current_raw)
+
+    # Fetch history in a thread to keep event loop free
+    history_data = await asyncio.to_thread(fetch_history_sync, pincode)
+
+    condensed_history = [
+        {
+            "timestamp": row["created_at"],
+            "score":     row["total_score"],
+            "severity":  row["severity_tier"],
+            "city":      row.get("city", "default"),
+        }
+        for row in history_data
+    ]
+
+    # Resolve city for the response envelope (may already be in cache)
+    city = current_data.get("city") or resolve_city_from_pincode(pincode)
+    weights = get_city_weights(city)
+
+    return {
+        "pincode":    pincode,
+        "city":       city,
+        "weights":    weights,
+        "current":    current_data,
+        "history_24h": condensed_history,
+    }
