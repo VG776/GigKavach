@@ -256,7 +256,7 @@ def _validate_payout_inputs(
         logger.warning(f"dci_score={dci_score} outside typical range [0, 100]")
     
     # City
-    valid_cities = {'Chennai', 'Delhi', 'Mumbai'}
+    valid_cities = {'Chennai', 'Delhi', 'Mumbai', 'Bengaluru', 'Kolkata'}
     if city not in valid_cities:
         raise PayoutCalculationError(f"Invalid city '{city}', must be one of {valid_cities}")
     

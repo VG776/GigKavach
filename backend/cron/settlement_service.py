@@ -1,15 +1,19 @@
 """
-cron/settlement_service.py — Daily Payout Settlement
-────────────────────────────────────────────────────
+cron/settlement_service.py — Daily Payout Settlement (City-Aware)
+──────────────────────────────────────────────────────────────────
 Runs at 11:55 PM Daily.
-Aggregates all disruption data for the day, calculates total hours per worker, 
+Aggregates all disruption data for the day, calculates total hours per worker,
 and triggers the final payout settlement via api/payouts.py.
+
+Now city-aware: each worker's city is resolved from their pincode or DB record
+so the payout calculation uses the correct city-specific DCI weight profile.
 """
 import logging
 import asyncio
 from datetime import datetime, time, timedelta, timezone
 from api.payouts import calculate_payout, PayoutRequest
 from services.eligibility_service import check_eligibility
+from config.city_dci_weights import resolve_city_from_pincode, normalise_city_name
 
 logger = logging.getLogger("gigkavach.settlement")
 
@@ -70,12 +74,36 @@ async def run_daily_settlement():
                 # Import here to avoid circular dependency at module load time
                 from services.payout_service import calculate_payout as svc_calculate_payout
 
+                # ── City Resolution ──────────────────────────────────────────────
+                # Priority:
+                #   1. worker record's 'city' field (previously stored canonical name)
+                #   2. resolve from worker's pincode
+                #   3. safe regional fallback → "Bengaluru"
+                worker_city_raw = worker.get("city") or ""
+                worker_pincode  = worker.get("pincode") or ""
+
+                worker_city = normalise_city_name(worker_city_raw)
+                if not worker_city and worker_pincode:
+                    worker_city = resolve_city_from_pincode(worker_pincode)
+                if not worker_city or worker_city == "default":
+                    worker_city = "Bengaluru"
+                    logger.debug(
+                        f"[SETTLEMENT] Worker {worker_id} city unresolvable — "
+                        f"defaulting to Bengaluru"
+                    )
+
+                logger.debug(
+                    f"[SETTLEMENT] worker={worker_id} | city={worker_city} | "
+                    f"pincode={worker_pincode}"
+                )
+
+                # ── Payout calculation with city-specific weights ─────────────
                 payout_result = svc_calculate_payout(
                     baseline_earnings=baseline,
                     disruption_duration=min(duration_minutes, 480),
                     dci_score=d_score,
                     worker_id=worker_id,
-                    city="Bengaluru",
+                    city=worker_city,
                     zone_density="Mid",
                     shift=policy.get("shift", "day").capitalize(),
                     disruption_type="Disruption",
@@ -85,7 +113,10 @@ async def run_daily_settlement():
                 )
 
                 payout_amount = payout_result.get("payout", 0.0)
-                logger.info(f"✅ SETTLED: Worker {worker_id} | Amount: ₹{payout_amount:.2f}")
+                logger.info(
+                    f"✅ SETTLED: Worker {worker_id} | City: {worker_city} | "
+                    f"Amount: ₹{payout_amount:.2f}"
+                )
                 settled_count += 1
 
                 # 7. Trigger WhatsApp settlement alert
