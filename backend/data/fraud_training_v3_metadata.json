@@ -1,8 +1,16 @@
 {
-  "generated_at": "2026-04-11T16:07:09.529351",
-  "pipeline": {
-    "stage_2": "IsolationForest",
-    "stage_3": "XGBClassifier"
+  "generated_at": "2026-04-11T16:07:10.200005",
+  "regeneration_attempts": 0,
+  "total_records": 5000,
+  "fraud_records": 1466,
+  "clean_records": 3534,
+  "generation_techniques": {
+    "gaussian_noise": 250,
+    "adversarial_evasion": 250,
+    "hybrid_patterns": 250,
+    "obvious_fraud": 250,
+    "clearly_legitimate": 3200,
+    "borderline_legitimate": 800
   },
   "features": [
     "gps_ip_distance_km",
@@ -40,12 +48,23 @@
     "co_claim_graph_score"
   ],
   "num_features": 33,
-  "training_data_points": 5000,
-  "fraud_samples": 2885,
-  "clean_samples": 2115,
-  "models": {
-    "isolation_forest": "models/fraud_detection_v2/stage2_isolation_forest.pkl",
-    "xgboost": "models/fraud_detection_v2/stage3_xgboost.pkl",
-    "scaler": "models/fraud_detection_v2/scaler.pkl"
+  "quality_metrics": {
+    "dt_baseline_accuracy": 0.8462,
+    "rf_upper_bound_accuracy": 0.8536
+  },
+  "target_metrics": {
+    "expected_cv_std_min": 0.03,
+    "expected_accuracy_range": [
+      0.7,
+      0.85
+    ],
+    "expected_recall_range": [
+      0.55,
+      0.75
+    ],
+    "expected_fpr_range": [
+      0.03,
+      0.07
+    ]
   }
 }

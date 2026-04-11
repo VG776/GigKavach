@@ -18,9 +18,20 @@ import numpy as np
 logger = logging.getLogger("gigkavach.xgboost_loader")
 
 # Model paths
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-MODEL_PATH = os.path.join(PROJECT_ROOT, "models", "v3", "xgboost_payout_v3.pkl")
-METADATA_PATH = os.path.join(PROJECT_ROOT, "models", "v3", "xgboost_metadata_v3.json")
+BACKEND_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+REPO_ROOT = os.path.dirname(BACKEND_ROOT)
+
+MODEL_CANDIDATES = [
+    os.path.join(BACKEND_ROOT, "models", "v3", "xgboost_payout_v3.pkl"),
+    os.path.join(REPO_ROOT, "models", "v3", "xgboost_payout_v3.pkl"),
+]
+METADATA_CANDIDATES = [
+    os.path.join(BACKEND_ROOT, "models", "v3", "xgboost_metadata_v3.json"),
+    os.path.join(REPO_ROOT, "models", "v3", "xgboost_metadata_v3.json"),
+]
+
+MODEL_PATH = MODEL_CANDIDATES[0]
+METADATA_PATH = METADATA_CANDIDATES[0]
 
 # Global model cache
 _MODEL_CACHE = None
@@ -34,14 +45,15 @@ def load_model():
     if _MODEL_CACHE is not None:
         return _MODEL_CACHE
     
-    if not os.path.exists(MODEL_PATH):
-        logger.error(f"Model file not found: {MODEL_PATH}")
-        raise FileNotFoundError(f"XGBoost model not found at {MODEL_PATH}")
+    model_path = next((path for path in MODEL_CANDIDATES if os.path.exists(path)), None)
+    if not model_path:
+        logger.error(f"Model file not found in candidates: {MODEL_CANDIDATES}")
+        raise FileNotFoundError(f"XGBoost model not found at any of {MODEL_CANDIDATES}")
     
     try:
-        with open(MODEL_PATH, 'rb') as f:
+        with open(model_path, 'rb') as f:
             _MODEL_CACHE = pickle.load(f)
-        logger.info(f"✅ Model loaded: {MODEL_PATH}")
+        logger.info(f"✅ Model loaded: {model_path}")
         return _MODEL_CACHE
     except Exception as e:
         logger.error(f"Failed to load model: {str(e)}")
@@ -55,14 +67,15 @@ def load_metadata() -> Dict:
     if _METADATA_CACHE is not None:
         return _METADATA_CACHE
     
-    if not os.path.exists(METADATA_PATH):
-        logger.error(f"Metadata file not found: {METADATA_PATH}")
-        raise FileNotFoundError(f"Metadata not found at {METADATA_PATH}")
+    metadata_path = next((path for path in METADATA_CANDIDATES if os.path.exists(path)), None)
+    if not metadata_path:
+        logger.error(f"Metadata file not found in candidates: {METADATA_CANDIDATES}")
+        raise FileNotFoundError(f"Metadata not found at any of {METADATA_CANDIDATES}")
     
     try:
-        with open(METADATA_PATH, 'r') as f:
+        with open(metadata_path, 'r') as f:
             _METADATA_CACHE = json.load(f)
-        logger.info(f"✅ Metadata loaded: {METADATA_PATH}")
+        logger.info(f"✅ Metadata loaded: {metadata_path}")
         return _METADATA_CACHE
     except Exception as e:
         logger.error(f"Failed to load metadata: {str(e)}")
@@ -181,9 +194,9 @@ def get_model_info() -> Dict:
         'name': metadata['model_name'],
         'created_at': metadata['created_at'],
         'hyperparameters': metadata['hyperparameters'],
-        'test_r2': metadata['metrics']['test']['r2'],
-        'test_mae': metadata['metrics']['test']['mae'],
-        'cv_r2': metadata['cross_validation']['best_cv_r2'],
+        'test_r2': metadata['performance']['test']['r2'],
+        'test_mae': metadata['performance']['test']['mae'],
+        'cv_r2': metadata['performance']['cv']['mean_r2'],
     }
 
 
@@ -395,7 +408,7 @@ def batch_predict(features_df: pd.DataFrame, batch_size: int = 1000) -> np.ndarr
 def get_feature_importance() -> Dict[str, float]:
     """Get feature importance rankings."""
     metadata = load_metadata()
-    return metadata['metrics']['feature_importance']
+    return metadata['feature_importance']
 
 
 def describe_features() -> str:

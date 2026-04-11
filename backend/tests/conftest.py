@@ -1,5 +1,10 @@
+import sys
+import os
 import pytest
 from unittest.mock import MagicMock
+
+# Add the backend directory to sys.path so tests can import main, api, services, etc.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 @pytest.fixture(autouse=True)
 def mock_supabase_for_whatsapp(monkeypatch):

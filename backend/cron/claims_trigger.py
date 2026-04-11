@@ -21,6 +21,7 @@ import asyncio
 import datetime
 from typing import List, Dict, Any
 
+from config.city_dci_weights import normalise_city_name, resolve_city_from_pincode
 from services.fraud_service import check_fraud
 from services.payout_service import calculate_payout
 from utils.supabase_client import get_supabase
@@ -268,6 +269,7 @@ def process_single_claim(claim: Dict[str, Any]) -> Dict[str, Any]:
     """
     claim_id = claim.get("id")
     worker_id = claim.get("worker_id")
+    resolved_city = _resolve_claim_city(claim)
     
     logger.info(f"[CLAIM PROCESSING] Starting: claim={claim_id} | worker={worker_id}")
     
@@ -279,7 +281,7 @@ def process_single_claim(claim: Dict[str, Any]) -> Dict[str, Any]:
             "dci_score": claim.get("dci_score", 0),
             "disruption_duration": claim.get("disruption_duration", 0),
             "disruption_type": claim.get("disruption_type", "Unknown"),
-            "city": claim.get("city", ""),
+            "city": resolved_city,
             "hour_of_day": claim.get("hour_of_day", 0),
             "day_of_week": claim.get("day_of_week", 0),
             "zone_density": claim.get("zone_density", "Mid"),
@@ -347,7 +349,7 @@ def process_single_claim(claim: Dict[str, Any]) -> Dict[str, Any]:
             disruption_duration=claim.get("disruption_duration", 0),
             dci_score=claim.get("dci_score", 0),
             worker_id=worker_id,
-            city=claim.get("city", ""),
+            city=resolved_city,
             zone_density=claim.get("zone_density", "Mid"),
             shift=claim.get("shift", "Morning"),
             disruption_type=claim.get("disruption_type", "Unknown"),
@@ -412,6 +414,23 @@ def process_single_claim(claim: Dict[str, Any]) -> Dict[str, Any]:
             "status": "error",
             "error": str(e)
         }
+
+
+def _resolve_claim_city(claim: Dict[str, Any]) -> str:
+    """Resolve a canonical city for claim processing, falling back from pincode when needed."""
+    raw_city = claim.get("city") or ""
+    pincode = claim.get("pincode") or claim.get("pin_code") or ""
+
+    normalized = normalise_city_name(raw_city)
+    if normalized:
+        return normalized
+
+    if pincode:
+        resolved = resolve_city_from_pincode(str(pincode))
+        if resolved != "default":
+            return resolved
+
+    return "Bengaluru"
 
 
 async def trigger_claims_pipeline():

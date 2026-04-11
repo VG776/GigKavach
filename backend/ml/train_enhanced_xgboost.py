@@ -36,11 +36,11 @@ from sklearn.model_selection import cross_val_score, RandomizedSearchCV
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 # Handle imports
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(0, PROJECT_ROOT)
+BACKEND_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, BACKEND_ROOT)
 
 from ml.feature_engineering import generate_synthetic_data, process_data
-MODELS_DIR = os.path.join(PROJECT_ROOT, "models", "v3")
+MODELS_DIR = os.path.join(BACKEND_ROOT, "models", "v3")
 os.makedirs(MODELS_DIR, exist_ok=True)
 
 MODEL_PATH = os.path.join(MODELS_DIR, "xgboost_payout_v3.pkl")

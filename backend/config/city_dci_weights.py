@@ -348,6 +348,16 @@ PINCODE_EXACT_MAP: Dict[str, str] = {
     "700160": "Kolkata",
 }
 
+# Prefix fallback for valid but unlisted pincodes.
+PINCODE_PREFIX_MAP: Dict[str, str] = {
+    "400": "Mumbai",
+    "110": "Delhi",
+    "560": "Bengaluru",
+    "562": "Bengaluru",
+    "600": "Chennai",
+    "700": "Kolkata",
+}
+
 # ─── Canonical city name normalisations ────────────────────────────────────────
 # Handles API-provided city strings that might not match table keys exactly.
 CITY_NAME_ALIASES: Dict[str, str] = {
@@ -501,6 +511,15 @@ def resolve_city_from_pincode(pincode: str) -> str:
     # Exact match
     city = PINCODE_EXACT_MAP.get(pincode_clean)
     if city:
+        return city
+
+    # Prefix fallback covers valid-but-unlisted pincodes in the same postal region.
+    prefix = pincode_clean[:3]
+    city = PINCODE_PREFIX_MAP.get(prefix)
+    if city:
+        logger.debug(
+            f"[resolve_city_from_pincode] Pincode '{pincode_clean}' matched prefix '{prefix}' → {city}"
+        )
         return city
 
     logger.debug(
