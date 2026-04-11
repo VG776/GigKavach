@@ -16,8 +16,16 @@ from datetime import datetime
 from utils.db import get_supabase
 from models.worker import PlanType
 from api.workers import PLAN_PREMIUMS
+from config.settings import settings
 
 logger = logging.getLogger("gigkavach.premium_service")
+
+# Bonus coverage limits per plan (max hours during high-DCI)
+BONUS_COVERAGE_LIMITS = {
+    PlanType.BASIC: 1,   # Basic: max 1 bonus hour
+    PlanType.PLUS: 2,    # Plus: max 2 bonus hours
+    PlanType.PRO: 3,     # Pro: max 3 bonus hours
+}
 
 # Model Paths
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -47,6 +55,9 @@ def _derive_mock_zone_metrics(pincode: str) -> tuple[float, float]:
     For demo purposes: derived deterministic values for 
     'historical avg DCI' and 'predicted max DCI' based on the pincode string hash.
     In real production, this queries from a time-series datastore using Tomorrow.io.
+    
+    TODO (Prod): Replace with API call when Tomorrow.io integration available.
+    Use config.settings.USE_REAL_WEATHER_API feature flag.
     """
     # Deterministic pseudo-randomness based on pincode
     pin_val = sum(ord(c) for c in pincode)
@@ -88,13 +99,22 @@ def compute_dynamic_quote(worker_id: str, plan: str) -> dict:
         
     base_price = PLAN_PREMIUMS[requested_plan][0]  # Should be 30, 37, or 44
     
+    # Initialize zone metrics (computed once, reused throughout)
+    avg_dci = None
+    pred_dci = None
+    
     # Fallback to simple deterministic discount if Model is missing
     if model == "FAILED" or model is None:
         logger.warning(f"Using fallback deterministic discount for {worker_id}.")
         raw_discount_mult = 0.05 if gig_score > 80 else 0.0
+        reason_msg = "Unable to compute personalized discount at this time. Standard rates apply."
     else:
-        # 2. Extract Geospacial Features
-        avg_dci, pred_dci = _derive_mock_zone_metrics(primary_pincode)
+        # 2. Extract Geospacial Features (COMPUTED ONCE, REUSED)
+        try:
+            avg_dci, pred_dci = _derive_mock_zone_metrics(primary_pincode)
+        except Exception as e:
+            logger.warning(f"Failed to derive zone metrics for pincode {primary_pincode}: {e}")
+            avg_dci, pred_dci = 30.0, 50.0  # Fallback safe defaults
         
         features = pd.DataFrame([{
             'worker_gig_score': gig_score,
@@ -110,7 +130,7 @@ def compute_dynamic_quote(worker_id: str, plan: str) -> dict:
         prediction = model.predict(features)[0]
         raw_discount_mult = np.clip(prediction, 0.0, 0.30)
         
-        # Explainability feature mapping for UI Insights
+        # Explainability feature mapping for UI Insights (computed once)
         reason_msg = _generate_nlp_reason(raw_discount_mult, gig_score, pred_dci, shift)
 
     # 4. Premium Math
@@ -125,9 +145,19 @@ def compute_dynamic_quote(worker_id: str, plan: str) -> dict:
     # Check if we should offer 'Bonus Coverage' instead of pure discount
     # E.g. If DCI is super high, we don't hike prices (Psychology rule!), 
     # but we might give the worker +1 guaranteed active hour extension!
+    # Validate against plan-specific maximum limits
     bonus_coverage_hours = 0
-    if locals().get('pred_dci', 0) > 70:
-        bonus_coverage_hours = 2
+    if model != "FAILED" and model is not None and pred_dci is not None:
+        # Reuse zone metrics computed above
+        if pred_dci > 70:
+            plan_bonus_limit = BONUS_COVERAGE_LIMITS.get(requested_plan, 2)
+            # Clamp to plan-specific maximum (but never exceed 3 hours)
+            bonus_coverage_hours = min(plan_bonus_limit, 3)
+    
+    # Determine zone risk level (reusing zone metrics computed above)
+    forecasted_zone_risk = "Normal"
+    if model != "FAILED" and model is not None and pred_dci is not None:
+        forecasted_zone_risk = "High" if pred_dci > 65 else "Normal"
         
     return {
         "worker_id": worker_id,
@@ -137,10 +167,10 @@ def compute_dynamic_quote(worker_id: str, plan: str) -> dict:
         "bonus_coverage_hours": bonus_coverage_hours,
         "plan_type": requested_plan.value,
         "insights": {
-            "reason": locals().get('reason_msg', "Thank you for being a reliable GigKavach partner."),
+            "reason": reason_msg,
             "gig_score": gig_score,
             "primary_zone": primary_pincode,
-            "forecasted_zone_risk": "High" if locals().get('pred_dci', 0) > 65 else "Normal"
+            "forecasted_zone_risk": forecasted_zone_risk
         }
     }
 

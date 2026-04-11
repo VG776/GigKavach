@@ -82,11 +82,20 @@ def update_gig_score(worker_id: str, event_type: GigScoreEvent, metadata: Dict[s
     new_status = account_status
     if new_score < 30.0 and account_status == "active":
         new_status = "suspended"
-        logger.warning(f"Worker {worker_id} GigScore dropped to {new_score}. Account suspended.")
+        logger.warning(
+            f"[ACCOUNT SUSPENSION] Worker {worker_id} GigScore dropped to {new_score:.1f}. "
+            f"Account suspended due to {event_type.value}. Original score was {current_score:.1f}."
+        )
     elif new_score >= 30.0 and account_status == "suspended":
-        # Maybe they successfully appealed, bringing score back up over 30
+        # Account reactivation after score recovery
         new_status = "active"
-        logger.info(f"Worker {worker_id} GigScore restored to {new_score}. Account reactivated.")
+        reactivation_reason = "Appeal accepted"
+        if metadata and "penalty_amount" in metadata:
+            reactivation_reason = "Dispute resolved"
+        logger.warning(
+            f"[ACCOUNT REACTIVATION] Worker {worker_id} restored to {new_score:.1f}. "
+            f"Account reactivated. Event: {event_type.value}. Reason: {reactivation_reason}."
+        )
         
     # 4. Database Write
     update_payload = {
