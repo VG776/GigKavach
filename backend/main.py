@@ -203,6 +203,7 @@ cors_origins = [
     "http://localhost:5173",           # Fallback Vite port
     "http://127.0.0.1:3000",           # Localhost IPv4
     "http://127.0.0.1:5173",           # Localhost IPv4 fallback
+    "https://gig-kavach-beryl.vercel.app/"
 ]
 
 # Add environment-specific origins
