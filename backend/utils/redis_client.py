@@ -23,20 +23,43 @@ class MockRedis:
     def __init__(self, url):
         self.url = url
         self._store = {}
-    async def get(self, key, *args, **kwargs): return self._store.get(key)
+    
+    async def get(self, key, *args, **kwargs):
+        return self._store.get(key)
+    
     async def set(self, key, value, *args, **kwargs):
-        if kwargs.get('nx') and key in self._store: return False
+        if kwargs.get('nx') and key in self._store:
+            return False
         self._store[key] = value
         return True
+    
     async def setex(self, key, time, value):
         self._store[key] = value
         return True
+    
     async def delete(self, key, *args, **kwargs):
         if key in self._store:
             del self._store[key]
         return True
-    async def expire(self, *args, **kwargs): return True
-    async def aclose(self, *args, **kwargs): pass
+    
+    async def expire(self, *args, **kwargs):
+        return True
+        
+    async def incr(self, key, *args, **kwargs):
+        val = int(self._store.get(key, 0)) + 1
+        self._store[key] = val
+        return val
+
+    async def aclose(self, *args, **kwargs):
+        pass
+
+    def pipeline(self):
+        # Return self; mock execute to return a list
+        return self
+
+    async def execute(self):
+        return [1, True]
+
     def __getattr__(self, name):
         # Gracefully handle any other redis methods
         async def mock_method(*args, **kwargs): return None

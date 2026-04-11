@@ -1,15 +1,19 @@
 """
-cron/settlement_service.py — Daily Payout Settlement
-────────────────────────────────────────────────────
+cron/settlement_service.py — Daily Payout Settlement (City-Aware)
+──────────────────────────────────────────────────────────────────
 Runs at 11:55 PM Daily.
-Aggregates all disruption data for the day, calculates total hours per worker, 
+Aggregates all disruption data for the day, calculates total hours per worker,
 and triggers the final payout settlement via api/payouts.py.
+
+Now city-aware: each worker's city is resolved from their pincode or DB record
+so the payout calculation uses the correct city-specific DCI weight profile.
 """
 import logging
 import asyncio
 from datetime import datetime, time, timedelta, timezone
 from api.payouts import calculate_payout, PayoutRequest
 from services.eligibility_service import check_eligibility
+from config.city_dci_weights import resolve_city_from_pincode, normalise_city_name
 
 logger = logging.getLogger("gigkavach.settlement")
 
@@ -60,6 +64,39 @@ async def run_daily_settlement():
                 rejected_count += 1
                 continue
 
+            # 5.5 CRITICAL FIX: Fraud verification before payout
+            # Check if this worker has any fraud-flagged claims during this disruption window
+            fraud_check_passed = True
+            try:
+                from utils.supabase_client import get_supabase as get_sb_fraud
+                sb_fraud = get_sb_fraud()
+                if sb_fraud and settings.SUPABASE_URL:
+                    claims_result = (
+                        sb_fraud.table("claims")
+                        .select("id, is_fraud, fraud_decision")
+                        .eq("worker_id", worker_id)
+                        .gte("created_at", d_start.isoformat())
+                        .lte("created_at", d_end.isoformat())
+                        .execute()
+                    )
+                    disruption_claims = claims_result.data if claims_result.data else []
+                    
+                    # Check each claim for fraud status
+                    for claim in disruption_claims:
+                        if claim.get("is_fraud") or claim.get("fraud_decision") in ["FLAG_50", "BLOCK"]:
+                            logger.warning(
+                                f"[SETTLEMENT] ❌ FRAUD DETECTED: Worker {worker_id} claim {claim.get('id')} "
+                                f"marked as fraud (decision: {claim.get('fraud_decision')}). Skipping payout."
+                            )
+                            fraud_check_passed = False
+                            break
+            except Exception as fraud_check_err:
+                logger.error(f"[SETTLEMENT] Fraud check failed: {fraud_check_err}. Proceeding with caution.")
+            
+            if not fraud_check_passed:
+                rejected_count += 1
+                continue
+
             # 6. Task 6: Call SERVICE layer, not API endpoint function
             #    payout_service.calculate_payout handles midnight splits internally
             try:
@@ -70,12 +107,36 @@ async def run_daily_settlement():
                 # Import here to avoid circular dependency at module load time
                 from services.payout_service import calculate_payout as svc_calculate_payout
 
+                # ── City Resolution ──────────────────────────────────────────────
+                # Priority:
+                #   1. worker record's 'city' field (previously stored canonical name)
+                #   2. resolve from worker's pincode
+                #   3. safe regional fallback → "Bengaluru"
+                worker_city_raw = worker.get("city") or ""
+                worker_pincode  = worker.get("pincode") or ""
+
+                worker_city = normalise_city_name(worker_city_raw)
+                if not worker_city and worker_pincode:
+                    worker_city = resolve_city_from_pincode(worker_pincode)
+                if not worker_city or worker_city == "default":
+                    worker_city = "Bengaluru"
+                    logger.debug(
+                        f"[SETTLEMENT] Worker {worker_id} city unresolvable — "
+                        f"defaulting to Bengaluru"
+                    )
+
+                logger.debug(
+                    f"[SETTLEMENT] worker={worker_id} | city={worker_city} | "
+                    f"pincode={worker_pincode}"
+                )
+
+                # ── Payout calculation with city-specific weights ─────────────
                 payout_result = svc_calculate_payout(
                     baseline_earnings=baseline,
                     disruption_duration=min(duration_minutes, 480),
                     dci_score=d_score,
                     worker_id=worker_id,
-                    city="Bengaluru",
+                    city=worker_city,
                     zone_density="Mid",
                     shift=policy.get("shift", "day").capitalize(),
                     disruption_type="Disruption",
@@ -85,8 +146,16 @@ async def run_daily_settlement():
                 )
 
                 payout_amount = payout_result.get("payout", 0.0)
-                logger.info(f"✅ SETTLED: Worker {worker_id} | Amount: ₹{payout_amount:.2f}")
+                logger.info(
+                    f"✅ SETTLED: Worker {worker_id} | City: {worker_city} | "
+                    f"Amount: ₹{payout_amount:.2f}"
+                )
                 settled_count += 1
+                
+                # INTEGRATION: Reward valid severe claims
+                if d_score > 85:
+                    from services.gigscore_service import update_gig_score, GigScoreEvent
+                    update_gig_score(worker_id, GigScoreEvent.VALID_SEVERE_CLAIM, {"dci": d_score})
 
                 # 7. Trigger WhatsApp settlement alert
                 try:

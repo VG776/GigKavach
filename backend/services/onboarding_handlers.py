@@ -260,7 +260,7 @@ async def handle_plan_selection(phone: str, message: str, state: dict) -> str:
             "status": "active",
             "week_start": str(tomorrow),
             "coverage_pct": worker_data["coverage_pct"],
-            "weekly_premium": 69 if plan == "basic" else 89 if plan == "plus" else 99,
+            "weekly_premium": 30 if plan == "basic" else 37 if plan == "plus" else 44,
         }
         
         sb.table("policies").insert(policy_data).execute()
@@ -344,10 +344,14 @@ async def handle_renew(phone: str, message: str) -> str:
             "status": "active",
             "week_start": str(tomorrow),
             "coverage_pct": 40 if plan == "basic" else 50 if plan == "plus" else 70,
-            "weekly_premium": 69 if plan == "basic" else 89 if plan == "plus" else 99,
+            "weekly_premium": 30 if plan == "basic" else 37 if plan == "plus" else 44,
         }
         
         sb.table("policies").insert(policy_data).execute()
+        
+        # INTEGRATION: Clean Renewal Boost (+2 pts)
+        from services.gigscore_service import update_gig_score, GigScoreEvent
+        update_gig_score(worker["id"], GigScoreEvent.CLEAN_RENEWAL)
         
         messages = {
             "en": f"✅ Renewed for next week! Your {plan.title()} plan is active from {tomorrow}.",

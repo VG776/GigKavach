@@ -182,6 +182,21 @@ async def get_current_user(user: dict = Depends(verify_token)):
     )
 
 
+async def verify_admin(user: dict = Depends(verify_token)) -> dict:
+    """
+    Verify that the authenticated user has the 'admin' role.
+    Raises 403 Forbidden if the user is not an admin.
+    """
+    role = user.get("user_metadata", {}).get("role", "user")
+    if role != "admin":
+        logger.warning(f"🚫 Unauthorized admin access attempt by {user.get('email')}")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin privileges required for this operation",
+        )
+    return user
+
+
 @router.get("/verify")
 async def verify_auth(user: dict = Depends(verify_token)):
     """

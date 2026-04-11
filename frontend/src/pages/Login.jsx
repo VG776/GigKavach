@@ -20,13 +20,14 @@ const Login = () => {
 
   // Redirect if already logged in
   React.useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && user) {
       console.log('User authenticated, redirecting to dashboard');
       console.log('User:', user);
       console.log('Profile:', userProfile);
+      // Allow redirect even if profile is null - can be loaded on dashboard
       navigate('/dashboard');
     }
-  }, [isAuthenticated, navigate, user, userProfile]);
+  }, [isAuthenticated, user, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

@@ -57,9 +57,9 @@ def get_current_week_window() -> tuple[datetime, datetime]:
 
 # Plan → (weekly_premium_₹, coverage_pct)
 PLAN_PREMIUMS = {
-    PlanType.BASIC: (69.0,  40),   # ₹69/week, 40% loss coverage
-    PlanType.PLUS:  (89.0,  50),   # ₹89/week, 50% loss coverage
-    PlanType.PRO:   (99.0,  70),   # ₹99/week, 70% loss coverage
+    PlanType.BASIC: (30.0,  40),   # ₹30/week, 40% loss coverage
+    PlanType.PLUS:  (37.0,  50),   # ₹37/week, 50% loss coverage
+    PlanType.PRO:   (44.0,  70),   # ₹44/week, 70% loss coverage
 }
 
 
@@ -185,7 +185,7 @@ async def register_worker(worker_data: WorkerCreate) -> RegistrationResponse:
         "week_start":   week_start.date().isoformat(), # schema expects DATE not TIMESTAMP
         "week_end":     week_end.date().isoformat(),   # schema column: week_end
         "coverage_pct": PLAN_PREMIUMS[worker_data.plan][1],  # 40|50|70
-        "premium_paid": PLAN_PREMIUMS[worker_data.plan][0],  # ₹69|89|99
+        "premium_paid": PLAN_PREMIUMS[worker_data.plan][0],  # ₹30|37|44
         "is_active":    True,
         "created_at":   now.isoformat(),
     }

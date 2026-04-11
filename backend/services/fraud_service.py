@@ -11,7 +11,8 @@ from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
-from backend.ml.fraud_detector import get_detector
+from ml.fraud_detector import get_detector
+from services.gigscore_service import update_gig_score, GigScoreEvent
 
 # Configure logging
 logging.basicConfig(
@@ -87,6 +88,14 @@ class FraudDetectionService:
             
             if response['is_fraud']:
                 logger.warning(f"[FRAUD DETECTED] {log_msg} - {response['fraud_type']}")
+                
+                # INTEGRATION: Update GigScore based on fraud tier
+                worker_id = claim.get('worker_id')
+                if worker_id:
+                    if response['decision'] == 'FLAG_50':
+                        update_gig_score(worker_id, GigScoreEvent.FRAUD_TIER_1, {"claim_id": claim.get('claim_id')})
+                    elif response['decision'] == 'BLOCK':
+                        update_gig_score(worker_id, GigScoreEvent.FRAUD_TIER_2, {"claim_id": claim.get('claim_id')})
             else:
                 logger.info(f"[FRAUD CLEAR] {log_msg}")
             

@@ -11,7 +11,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy requirements and install Python dependencies
 COPY requirements.txt .
-RUN pip install --user --no-cache-dir -r requirements.txt
+# Increase pip timeout to 120s (default 15s), add retries
+RUN pip install --user --no-cache-dir \
+    --default-timeout=120 \
+    --retries 5 \
+    -r requirements.txt
 
 # Stage 2: Runtime
 FROM python:3.11-slim

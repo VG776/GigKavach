@@ -1,0 +1,70 @@
+{
+  "generated_at": "2026-04-11T16:07:10.200005",
+  "regeneration_attempts": 0,
+  "total_records": 5000,
+  "fraud_records": 1466,
+  "clean_records": 3534,
+  "generation_techniques": {
+    "gaussian_noise": 250,
+    "adversarial_evasion": 250,
+    "hybrid_patterns": 250,
+    "obvious_fraud": 250,
+    "clearly_legitimate": 3200,
+    "borderline_legitimate": 800
+  },
+  "features": [
+    "gps_ip_distance_km",
+    "gps_verified_pct",
+    "claims_in_zone_2min",
+    "claim_timestamp_std_sec",
+    "dci_score",
+    "dci_above_threshold",
+    "platform_earnings_before_disruption",
+    "platform_orders_before_disruption",
+    "platform_active_hours_week",
+    "hours_since_last_platform_activity",
+    "registration_days_ago",
+    "device_unique_workers_count",
+    "device_accounts_flagged_pct",
+    "gps_movement_entropy",
+    "gps_stationary_duration_pct",
+    "order_completion_pct_during_disruption",
+    "platform_gps_composite_flag",
+    "disruption_outside_shift",
+    "baseline_earnings",
+    "dci_deviation_from_threshold",
+    "num_times_near_threshold_last_7days",
+    "claims_last_1hr",
+    "claims_last_24hr",
+    "avg_time_between_claims",
+    "claims_last_7_days",
+    "avg_dci_at_claim",
+    "dci_threshold_proximity",
+    "time_since_last_claim",
+    "claim_amount_zscore",
+    "zone_claim_density",
+    "device_sharing_flag",
+    "dci_variance_across_claims",
+    "co_claim_graph_score"
+  ],
+  "num_features": 33,
+  "quality_metrics": {
+    "dt_baseline_accuracy": 0.8462,
+    "rf_upper_bound_accuracy": 0.8536
+  },
+  "target_metrics": {
+    "expected_cv_std_min": 0.03,
+    "expected_accuracy_range": [
+      0.7,
+      0.85
+    ],
+    "expected_recall_range": [
+      0.55,
+      0.75
+    ],
+    "expected_fpr_range": [
+      0.03,
+      0.07
+    ]
+  }
+}

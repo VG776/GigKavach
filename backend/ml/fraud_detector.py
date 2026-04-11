@@ -32,7 +32,7 @@ logger = logging.getLogger("gigkavach.fraud")
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
-from backend.ml.fraud_features_engineering import FraudFeaturesEngineer
+from ml.fraud_features_engineering import FraudFeaturesEngineer
 
 
 class FraudDetector:

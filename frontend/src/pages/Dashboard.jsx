@@ -4,6 +4,7 @@ import { payoutAPI } from '../api/payouts';
 import { dciAPI } from '../api/dci';
 import { workerAPI } from '../api/workers';
 import { DCIChart } from '../components/dci/DCIChart';
+import { logger } from '../utils/logger';
 
 
 
@@ -42,18 +43,27 @@ import { DCIChart } from '../components/dci/DCIChart';
 */
 export const Dashboard = () => {
   // Recent Payouts
-const defaultSpark = [40, 60, 30, 90, 70, 110, 80];
-const [recentPayouts, setRecentPayouts] = useState([]);
+  const defaultSpark = [40, 60, 30, 90, 70, 110, 80];
+  const [recentPayouts, setRecentPayouts] = useState([]);
+  const [recentPayoutsLoading, setRecentPayoutsLoading] = useState(true);
+  
   useEffect(() => {
     const fetchPayouts = async () => {
       try {
         console.log('[PAYOUTS] Fetching...');
-        const res = await payoutAPI.getAll({ limit: 3 });
+        const res = await payoutAPI.getAll({ limit: 3 }).catch(err => {
+          console.warn('[PAYOUTS] API call failed (expected in test mode):', err.message);
+          return { payouts: [] }; // Return empty array instead of throwing
+        });
         
-        console.log('[PAYOUTS] Response:', res);
-
-        // Handle both response formats
-        const payoutsData = res.payouts || res.data || [];
+        logger.debug('PAYOUTS', 'Response:', res);
+        const payoutsData = res?.payouts || res?.data || [];
+        
+        if (payoutsData.length === 0) {
+          logger.debug('PAYOUTS', 'No payouts yet, showing placeholders');
+          setRecentPayouts([]);
+          return;
+        }
         
         const formatted = payoutsData.map((p) => ({
           id: p.id,
@@ -70,42 +80,78 @@ const [recentPayouts, setRecentPayouts] = useState([]);
           timestamp: timeAgo(p.timestamp || p.created_at || new Date()),
         }));
 
-        console.log('[PAYOUTS] Formatted:', formatted);
+        logger.debug('PAYOUTS', 'Formatted:', formatted);
         setRecentPayouts(formatted);
       } catch (err) {
         console.error('[PAYOUTS] Error:', err);
+        setRecentPayouts([]); // Show empty state instead of hanging
+      } finally {
+        setRecentPayoutsLoading(false);
       }
     };
 
-    fetchPayouts();
+    // Add timeout to prevent hanging
+    const timer = setTimeout(fetchPayouts, 500);
+    return () => clearTimeout(timer);
   }, []);
 
-const [activeZones, setActiveZones] = useState([]);
-const [loading, setLoading] = useState(true);
+  const [activeZones, setActiveZones] = useState([]);
+  const [activeZonesLoading, setActiveZonesLoading] = useState(true);
 
   useEffect(() => {
     const fetchZones = async () => {
       try {
-        setLoading(true);
-        console.log('[DCI_ALERTS] Fetching...');
-        
-        const res = await dciAPI.getLatestAlerts(3);
-        
-        console.log('[DCI_ALERTS] Response:', res);
-        
-        const alertsData = res.alerts || res.data || [];
+        setActiveZonesLoading(true);
+        logger.debug('DCI_ALERTS', 'Fetching latest alerts...');
+
+        // First-load reliability: Render cold starts can exceed a short timeout,
+        // so retry a few times before falling back to an empty list.
+        let lastError = null;
+        let alertsData = [];
+        const maxAttempts = 4;
+
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+          try {
+            const res = await dciAPI.getLatestAlerts(3);
+
+            logger.debug('DCI_ALERTS', `Response attempt ${attempt}:`, res);
+
+            if (Array.isArray(res)) {
+              alertsData = res;
+            } else if (Array.isArray(res?.alerts)) {
+              alertsData = res.alerts;
+            } else if (Array.isArray(res?.data)) {
+              alertsData = res.data;
+            } else {
+              alertsData = [];
+            }
+
+            break;
+          } catch (err) {
+            lastError = err;
+            if (attempt < maxAttempts) {
+              // Linear backoff to tolerate backend warmup on first load
+              await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
+            }
+          }
+        }
+
+        if (lastError && alertsData.length === 0) {
+          console.warn('[DCI_ALERTS] Failed after retries:', lastError.message);
+        }
+
         setActiveZones(alertsData);
-        
-        console.log('[DCI_ALERTS] Set zones:', alertsData);
+        logger.debug('DCI_ALERTS', 'Set zones:', alertsData);
       } catch (err) {
         console.error('[DCI_ALERTS] Error:', err);
         setActiveZones([]);
       } finally {
-        setLoading(false);
+        setActiveZonesLoading(false);
       }
     };
 
-    fetchZones();
+    const timer = setTimeout(fetchZones, 500);
+    return () => clearTimeout(timer);
   }, []);
 
 
@@ -133,18 +179,25 @@ const sparkline = {
   fraudAlerts: [4, 6, 5, 8, 10, 11, 12],
 };
 
-const [todayPayout, setTodayPayout] = useState(0);
-const [loadingPayout, setLoadingPayout] = useState(true);
-const [todayDCI, setTodayDCI] = useState(0);
-const [activeWorkers, setActiveWorkers] = useState(0);
+const [todayPayout, setTodayPayout] = useState(null);
+const [todayDCI, setTodayDCI] = useState(null);
+const [activeWorkers, setActiveWorkers] = useState(null);
+const [metricsLoading, setMetricsLoading] = useState({
+  payout: true,
+  dci: true,
+  workers: true,
+});
+
   useEffect(() => {
     const fetchDCI = async () => {
       try {
         const res = await dciAPI.getTodayTotal();
-        setTodayDCI(res.total_dci_today ?? 0);
+        setTodayDCI(res?.total_dci_today ?? 0);
       } catch (err) {
-        console.error(err);
+        console.warn('[DCI] Failed to fetch today total:', err.message);
         setTodayDCI(0);
+      } finally {
+        setMetricsLoading((prev) => ({ ...prev, dci: false }));
       }
     };
 
@@ -155,10 +208,12 @@ const [activeWorkers, setActiveWorkers] = useState(0);
     const fetchWorkers = async () => {
       try {
         const res = await workerAPI.getActiveWeekCount();
-        setActiveWorkers(res.active_workers_week ?? 0);
+        setActiveWorkers(res?.active_workers_week ?? 0);
       } catch (err) {
-        console.error(err);
+        console.warn('[WORKERS] Failed to fetch count:', err.message);
         setActiveWorkers(0);
+      } finally {
+        setMetricsLoading((prev) => ({ ...prev, workers: false }));
       }
     };
 
@@ -202,10 +257,12 @@ const statCards = [
     const fetchPayoutTotal = async () => {
       try {
         const res = await payoutAPI.getTodayTotal();
-        setTodayPayout(res.total_payout_today ?? 0);
+        setTodayPayout(res?.total_payout_today ?? 0);
       } catch (err) {
-        console.error(err);
+        console.warn('[PAYOUTS] Failed to fetch today total:', err.message);
         setTodayPayout(0);
+      } finally {
+        setMetricsLoading((prev) => ({ ...prev, payout: false }));
       }
     };
 
@@ -269,6 +326,23 @@ const statCards = [
     return colors[type];
   };
 
+  const isDashboardLoading =
+    recentPayoutsLoading ||
+    activeZonesLoading ||
+    Object.values(metricsLoading).some(Boolean);
+
+  if (isDashboardLoading) {
+    return (
+      <div className="min-h-[65vh] flex items-center justify-center rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gigkavach-surface shadow-sm">
+        <div className="text-center px-6">
+          <div className="mx-auto mb-4 h-11 w-11 rounded-full border-4 border-gray-300/80 dark:border-gray-700 border-t-gigkavach-orange animate-spin" />
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Fetching backend data</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Fetching workers, payouts, and DCI metrics from the backend...</p>
+        </div>
+      </div>
+    );
+  }
+
 return (
   <div className="space-y-6">
 
@@ -284,6 +358,7 @@ const liveMetrics = {
   workers: activeWorkers,
 };
 
+const isMetricLoading = metricsLoading[card.key] ?? false;
 const value = liveMetrics[card.key] ?? metrics[card.key] ?? 0;
 
         const isPositive =
@@ -302,8 +377,14 @@ const value = liveMetrics[card.key] ?? metrics[card.key] ?? 0;
     </div>
 
     {/* Value */}
-    <p className="text-3xl font-black text-gray-900 dark:text-white mb-1 font-mono">
-      {typeof value === "number" && value > 1000 ? value.toLocaleString() : value}
+    <p className="text-3xl font-black text-gray-900 dark:text-white mb-1 font-mono min-h-[2.25rem] flex items-center">
+      {isMetricLoading ? (
+        <span className="inline-block h-7 w-20 rounded bg-gray-300/70 dark:bg-gray-700 animate-pulse" aria-label="Loading metric" />
+      ) : (
+        <>
+          {typeof value === "number" && value > 1000 ? value.toLocaleString() : value}
+        </>
+      )}
     </p>
 
     {/* Label */}

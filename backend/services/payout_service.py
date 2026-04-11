@@ -20,7 +20,8 @@ import logging
 from typing import Dict, Optional
 from datetime import datetime
 
-from backend.ml.xgboost_loader import (
+from config.city_dci_weights import normalise_city_name, resolve_city_from_pincode
+from ml.xgboost_loader import (
     extract_features,
     predict_multiplier,
     predict_with_confidence,
@@ -101,6 +102,8 @@ def calculate_payout(
         >>> print(f"Multiplier: {result['multiplier']:.2f}x")
     """
     try:
+        city = _normalize_payout_city(city)
+
         # Validate inputs
         _validate_payout_inputs(
             baseline_earnings,
@@ -256,7 +259,7 @@ def _validate_payout_inputs(
         logger.warning(f"dci_score={dci_score} outside typical range [0, 100]")
     
     # City
-    valid_cities = {'Chennai', 'Delhi', 'Mumbai'}
+    valid_cities = {'Chennai', 'Delhi', 'Mumbai', 'Bengaluru', 'Kolkata'}
     if city not in valid_cities:
         raise PayoutCalculationError(f"Invalid city '{city}', must be one of {valid_cities}")
     
@@ -312,7 +315,7 @@ def process_claim_for_payout(claim: Dict) -> Dict:
         disruption_duration=claim['disruption_duration'],
         dci_score=claim['dci_score'],
         worker_id=claim['worker_id'],
-        city=claim['city'],
+        city=_normalize_payout_city(claim.get('city', '')),
         zone_density=claim.get('zone_density', 'Mid'),  # Default to Mid if not provided
         shift=claim['shift'],
         disruption_type=claim['disruption_type'],
@@ -320,6 +323,18 @@ def process_claim_for_payout(claim: Dict) -> Dict:
         day_of_week=claim['day_of_week'],
         include_confidence=True,
     )
+
+
+def _normalize_payout_city(city: str) -> str:
+    """Canonicalize city names and provide a safe fallback for payout scoring."""
+    normalized = normalise_city_name(city)
+    if normalized:
+        return normalized
+
+    if isinstance(city, str) and city.strip() and city.strip() != "default":
+        return city.strip()
+
+    return resolve_city_from_pincode("560001")
 
 
 # ──────────────────────────────────────────────────────────

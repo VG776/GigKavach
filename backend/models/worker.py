@@ -39,9 +39,9 @@ class PlanType(str, Enum):
     Premium is fixed per tier. ML (XGBoost) only adjusts the PAYOUT amount,
     not what the worker pays.
     """
-    BASIC = "basic"   # ₹69/week → 40% daily earnings covered
-    PLUS = "plus"     # ₹89/week → 50% daily earnings covered
-    PRO = "pro"       # ₹99/week → 70% daily earnings covered
+    BASIC = "basic"   # ₹30/week → 40% daily earnings covered
+    PLUS = "plus"     # ₹37/week → 50% daily earnings covered
+    PRO = "pro"       # ₹44/week → 70% daily earnings covered
 
 
 class Language(str, Enum):

@@ -35,6 +35,7 @@ from api.fraud import router as fraud_router       # Task 8: now active
 from api.whatsapp import router as whatsapp_router
 from api.whatsapp_integration import router as whatsapp_integration_router
 from api.auth import router as auth_router         # Authentication routes
+from api.premium import router as premium_router
 
 
 # ─── Logging Setup ────────────────────────────────────────────────────────────
@@ -61,14 +62,35 @@ async def lifespan(app: FastAPI):
     logger.info(f"  Environment: {settings.APP_ENV}")
     logger.info("=" * 60)
 
-    # Verify critical credentials are set (warn but don't crash — allows
-    # teammates to run partial setups during development)
-    if not settings.SUPABASE_URL:
-        logger.warning("⚠️  SUPABASE_URL not set — database operations will fail")
-    if not settings.SUPABASE_ANON_KEY:
-        logger.warning("⚠️  SUPABASE_ANON_KEY not set — authentication will fail")
-    if not settings.TOMORROW_IO_API_KEY:
-        logger.warning("⚠️  TOMORROW_IO_API_KEY not set — DCI weather component will use fallbacks")
+    # ── STRICT STARTUP VALIDATION ─────────────────────────────────────────────
+    # Validate that all ESSENTIAL credentials are set before proceeding.
+    # If validation fails, CRASH immediately (don't just warn).
+    # This prevents confusing 500 errors on first database query.
+    
+    from utils.error_response import ConfigurationError
+    
+    missing_essential = []
+    if not (settings.SUPABASE_URL or "").strip():
+        missing_essential.append("SUPABASE_URL")
+    if not (settings.SUPABASE_SERVICE_ROLE_KEY or "").strip():
+        missing_essential.append("SUPABASE_SERVICE_ROLE_KEY")
+    
+    if missing_essential:
+        error_msg = f"❌ STARTUP FAILED: Missing essential environment variables: {', '.join(missing_essential)}"
+        logger.critical(error_msg)
+        # Stop the application from starting
+        raise ConfigurationError(
+            message=error_msg,
+            missing_vars=missing_essential
+        )
+    
+    # Warn about optional credentials (fallback available)
+    if not (settings.TOMORROW_IO_API_KEY or "").strip():
+        logger.warning("⚠️  TOMORROW_IO_API_KEY not set — DCI weather component will use mock data")
+    if not (settings.AQICN_API_TOKEN or "").strip():
+        logger.warning("⚠️  AQICN_API_TOKEN not set — AQI component will use mock data")
+    
+    logger.info("✅ All essential credentials validated successfully")
 
     # ── Start APScheduler for DCI Engine ─────────────────────────────────────
     # The DCI engine polls weather/AQI/social APIs every 5 minutes and
@@ -171,31 +193,44 @@ Backend API for the GigKavach platform serving food delivery workers (Zomato/Swi
 
 # ─── CORS Middleware ──────────────────────────────────────────────────────────
 # Allow React frontend (Vite locally, Vercel in production) to call this API
+# Configuration uses environment variables with sensible local defaults
 import os
 
+# Base CORS origins — always allow localhost for local development
 cors_origins = [
-    # LOCAL DEVELOPMENT
+    # LOCAL DEVELOPMENT (always enabled for developer flexibility)
     "http://localhost:3000",           # Vite dev server (npm run dev)
     "http://localhost:5173",           # Fallback Vite port
     "http://127.0.0.1:3000",           # Localhost IPv4
     "http://127.0.0.1:5173",           # Localhost IPv4 fallback
-    
-    # SERVER DEPLOYMENT
-    "http://13.51.165.52:3000",        # Production server
-    "http://13.51.165.52:5173",        # Production fallback
-    
-    # PRODUCTION (Vercel + Render)
-    "https://gigkavach-delta.vercel.app",
 ]
 
-# Add production/AWS URLs from environment variables (if set)
-aws_frontend_url = os.getenv("FRONTEND_URL")
-if aws_frontend_url:
-    cors_origins.append(aws_frontend_url)
+# Add environment-specific origins
+if settings.APP_ENV == "production":
+    # Production environment — only allow explicitly configured URLs
+    # MUST be set via environment variables for security
+    if settings.FRONTEND_PRODUCTION_URL:
+        cors_origins.append(settings.FRONTEND_PRODUCTION_URL)
+    
+    # Additional production origins from env
+    vercel_frontend_url = os.getenv("VERCEL_URL")
+    if vercel_frontend_url:
+        cors_origins.append(f"https://{vercel_frontend_url}")
+else:
+    # Development/staging — allow configured dev server URLs
+    # Support Docker Compose and local development networks
+    dev_server_url = os.getenv("DEV_SERVER_URL")
+    if dev_server_url:
+        cors_origins.append(dev_server_url)
+    
+    # Support Docker Compose internal hostname
+    if os.getenv("DOCKER_COMPOSE_ENV"):
+        cors_origins.extend([
+            "http://frontend:5173",        # Docker Compose service name
+            "http://frontend:3000",        # Alternative Vite port
+        ])
 
-frontend_server_url = os.getenv("FRONTEND_SERVER_URL")
-if frontend_server_url:
-    cors_origins.append(frontend_server_url)
+logger.debug(f"CORS Origins configured: {cors_origins}")
 
 app.add_middleware(
     CORSMiddleware,
@@ -218,6 +253,7 @@ app.include_router(whatsapp_router, prefix="/api/v1")       # Standardized prefi
 app.include_router(whatsapp_integration_router, prefix="/api/v1")  # Bot service integration
 app.include_router(payouts_router, prefix="/api/v1")        # Consolidated prefix
 app.include_router(fraud_router, prefix="/api/v1")          # Vijeth — fraud assessment
+app.include_router(premium_router, prefix="/api/v1")        # Dynamic Premium Model
 # TODO: app.include_router(dashboard_router, prefix="/api/v1")  # V Saatwik — admin metrics
 
 

@@ -1,7 +1,9 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, status
 from datetime import datetime, timezone
 from utils.db import get_supabase
+import logging
 
+logger = logging.getLogger("gigkavach.dci_dashboard")
 router = APIRouter()
 
 @router.get("/dci/total/today")
@@ -29,7 +31,8 @@ async def get_dci_today():
         }
 
     except Exception as e:
-        return {
-            "total_dci_today": 0,
-            "error": str(e)
-        }
+        logger.error(f"Failed to fetch DCI total for today: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch DCI total"
+        )
