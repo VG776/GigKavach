@@ -64,6 +64,39 @@ async def run_daily_settlement():
                 rejected_count += 1
                 continue
 
+            # 5.5 CRITICAL FIX: Fraud verification before payout
+            # Check if this worker has any fraud-flagged claims during this disruption window
+            fraud_check_passed = True
+            try:
+                from utils.supabase_client import get_supabase as get_sb_fraud
+                sb_fraud = get_sb_fraud()
+                if sb_fraud and settings.SUPABASE_URL:
+                    claims_result = (
+                        sb_fraud.table("claims")
+                        .select("id, is_fraud, fraud_decision")
+                        .eq("worker_id", worker_id)
+                        .gte("created_at", d_start.isoformat())
+                        .lte("created_at", d_end.isoformat())
+                        .execute()
+                    )
+                    disruption_claims = claims_result.data if claims_result.data else []
+                    
+                    # Check each claim for fraud status
+                    for claim in disruption_claims:
+                        if claim.get("is_fraud") or claim.get("fraud_decision") in ["FLAG_50", "BLOCK"]:
+                            logger.warning(
+                                f"[SETTLEMENT] ❌ FRAUD DETECTED: Worker {worker_id} claim {claim.get('id')} "
+                                f"marked as fraud (decision: {claim.get('fraud_decision')}). Skipping payout."
+                            )
+                            fraud_check_passed = False
+                            break
+            except Exception as fraud_check_err:
+                logger.error(f"[SETTLEMENT] Fraud check failed: {fraud_check_err}. Proceeding with caution.")
+            
+            if not fraud_check_passed:
+                rejected_count += 1
+                continue
+
             # 6. Task 6: Call SERVICE layer, not API endpoint function
             #    payout_service.calculate_payout handles midnight splits internally
             try:
