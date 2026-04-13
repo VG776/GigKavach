@@ -97,11 +97,19 @@ async def test_complete_onboarding_flow():
     # Step 3: Shift selection
     print("🎯 Step 3: Shift Selection")
     response = await route_message(phone, "2")  # Day shift
-    assert "upi" in response.lower() or "UPI" in response
+    assert "verification" in response.lower() or "id" in response.lower() or "aadhaar" in response.lower()
     state = await get_onboarding_state(phone)
-    assert state["step"] == 4  # Skips verification (step 3)
+    assert state["step"] == 3
     assert state["shift"] == "day"
     print(f"✅ Shift selected: {state['shift']}")
+
+    # Step 3.5: Verification
+    print("🎯 Step 3.5: Verification")
+    response = await route_message(phone, "123456789012")  # Mock ID
+    assert "upi" in response.lower() or "UPI" in response
+    state = await get_onboarding_state(phone)
+    assert state["step"] == 4
+    print(f"✅ Identity provided: {state['id_number']}")
     
     # Step 4: UPI entry
     print("🎯 Step 4: UPI Collection")
@@ -242,6 +250,7 @@ async def test_invalid_upi_format():
     await route_message(phone, "1")  # Language
     await route_message(phone, "1")  # Platform
     await route_message(phone, "1")  # Shift
+    await route_message(phone, "123456789012")  # ID Verification
     
     response = await route_message(phone, "invalid_upi")  # No @ symbol
     assert "Invalid" in response or "❌" in response
@@ -257,7 +266,7 @@ async def test_invalid_pincode_count():
     await handle_join(phone, "JOIN")
     
     # Skip to pincode step
-    for _ in range(4):
+    for _ in range(5):
         state = await get_onboarding_state(phone)
         step = state.get("step", 0)
         
@@ -267,6 +276,8 @@ async def test_invalid_pincode_count():
             await route_message(phone, "1")
         elif step == 2:
             await route_message(phone, "1")
+        elif step == 3:
+            await route_message(phone, "123456789012")
         elif step == 4:
             await route_message(phone, "test@upi")
             break
@@ -301,6 +312,7 @@ async def test_full_onboarding_journey_end_to_end():
         ("1", "English"),
         ("1", "Zomato"),
         ("1", "Morning shift"),
+        ("123456789012", "ID Verification"),
         ("worker@upi", "UPI"),
         ("560001,560002", "Pin codes"),
         ("1", "Basic plan"),

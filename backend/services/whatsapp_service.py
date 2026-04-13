@@ -61,6 +61,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "te": "పేమెంట్ కోసం మీ UPI ID పంపండి (ఉదా: ravi@upi):",
     },
 
+    "ask_verification": {
+        "en": "🛡️ Identity Verification: Please share your Aadhaar or DL number (for demo, any 12-digit number works):",
+        "kn": "🛡️ ಗುರುತಿನ ಚೀಟಿ ಪರಿಶೀಲನೆ: ನಿಮ್ಮ ಆಧಾರ್ ಅಥವಾ ಡಿಎಲ್ ಸಂಖ್ಯೆಯನ್ನು ಹಂಚಿಕೊಳ್ಳಿ:",
+        "hi": "🛡️ पहचान सत्यापन: कृपया अपना आधार या डीएल नंबर साझा करें:",
+        "ta": "🛡️ அடையாளச் சரிபார்ப்பு: உங்கள் ஆதார் அல்லது டிஎல் எண்ணைப் பகிரவும்:",
+        "te": "🛡️ గుర్తింపు ధృవీకరణ: దయచేసి మీ ఆధార్ లేదా డిఎల్ నంబర్‌ను పంపండి:",
+    },
+
     "ask_pincode": {
         "en": "Share the pin codes of areas you deliver in (up to 5, comma-separated).\nExample: 560047, 560034",
         "kn": "ನೀವು ಡೆಲಿವರಿ ಮಾಡುವ ಪ್ರದೇಶಗಳ ಪಿನ್ ಕೋಡ್ ಕಳುಹಿಸಿ (5 ವರೆಗೆ):\nಉದಾ: 560047, 560034",
@@ -111,6 +119,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "te": "💸 ₹{amount} {upi} కి పంపబడింది. Ref: {ref}.\nమీ సంపాదన రక్షించబడింది. 🛡️",
     },
 
+    "payout_processed": {
+        "en": "🛡️ *GigKavach Payout Successful!*\n\nHello {name}, your disruption payout of *₹{amount}* has been processed successfully to your UPI account.\n\nRef: {ref}",
+        "kn": "🛡️ *GigKavach ಪಾವತಿ ಯಶಸ್ವಿಯಾಗಿದೆ!*\n\nನಮಸ್ಕಾರ {name}, ನಿಮ್ಮ ಅಡಚಣೆಯ ಪಾವತಿ *₹{amount}* ನಿಮ್ಮ UPI ಖಾತೆಗೆ ಯಶಸ್ವಿಯಾಗಿ ಜಮೆಯಾಗಿದೆ.",
+        "hi": "🛡️ *GigKavach भुगतान सफल हुआ!*\n\nनमस्ते {name}, आपका *₹{amount}* का भुगतान आपके UPI खाते में सफलतापूर्वक जमा हो गया है।",
+        "ta": "🛡️ *GigKavach பணம் செலுத்துதல் வெற்றி!*\n\nவணக்கம் {name}, உங்கள் *₹{amount}* தொகை உங்கள் UPI கணக்கிற்கு வெற்றிகரமாக மாற்றப்பட்டது.",
+        "te": "🛡️ *GigKavach పేమెంట్ విజయవంతమైంది!*\n\nనమస్కారం {name}, మీ *₹{amount}* పేమెంట్ మీ UPI ఖాతాకు విజయవంతంగా చేరుకుంది.",
+    },
+
     # Soft flag — 50% payout, 48hr re-verification in progress
     "payout_partial": {
         "en": "Your payout is processing. Verification active due to signal conditions in your zone. No action needed.\n₹{amount} will arrive today. Remaining balance auto-credits in 48hrs.",
@@ -152,19 +168,8 @@ MESSAGES: dict[str, dict[str, str]] = {
 # ─── Bot API Configuration ───────────────────────────────────────────────────
 
 def get_bot_api_url() -> str:
-    """Get WhatsApp bot API base URL based on environment"""
-    # Support both localhost and server IP via environment variable
-    bot_url = os.getenv("BOT_API_URL")
-    if bot_url:
-        return bot_url.rstrip("/")
-    
-    # Fallback based on environment
-    if settings.APP_ENV == "production":
-        # TODO: Set BOT_API_URL environment variable in Render dashboard
-        # Format: https://your-whatsapp-bot-deployment.onrender.com or similar
-        # For now, returns localhost (should be configured)
-        return os.getenv("BOT_API_URL", "http://localhost:3001")
-    return "http://localhost:3001"
+    """Get WhatsApp bot API base URL from centralized settings"""
+    return settings.BOT_API_URL or "http://localhost:3001"
 
 
 # ─── Core Send Functions ─────────────────────────────────────────────────────
@@ -261,3 +266,56 @@ def notify_worker(
         sid = send_sms(phone_number, message)
 
     return sid is not None
+
+
+# ─── Async Helpers for Webhooks & Cron ───────────────────────────────────────
+
+async def send_whatsapp_message(phone_number: str, message: str) -> bool:
+    """Async version of send_whatsapp for use in FastAPI routes and webhooks."""
+    try:
+        clean_phone = phone_number.lstrip("+")
+        bot_api_url = get_bot_api_url()
+        
+        payload = {
+            "phone": clean_phone,
+            "message": message,
+            "messageType": "notification"
+        }
+        
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                f"{bot_api_url}/send-message",
+                json=payload
+            )
+            return response.status_code == 200
+    except Exception as e:
+        logger.error(f"Async WhatsApp failed to {phone_number}: {e}")
+        return False
+
+async def send_settlement_alert(worker_id: str, amount: float, upi_id: str, ref: str):
+    """
+    Dedicated async helper for the daily settlement engine.
+    Fetches worker language preference and sends the 'payout_sent' template.
+    """
+    from utils.supabase_client import get_supabase
+    sb = get_supabase()
+    
+    # 1. Fetch worker language and phone
+    result = sb.table("workers").select("phone_number, language").eq("id", worker_id).single().execute()
+    if not result.data:
+        logger.error(f"Cannot send settlement alert: Worker {worker_id} not found")
+        return False
+        
+    phone = result.data["phone_number"]
+    lang  = result.data.get("language", "en")
+    
+    # 2. Format and send using notify_worker (which is sync, so we wrap or use async send)
+    # We use notify_worker's logic to get the template
+    return notify_worker(
+        phone_number=phone,
+        message_key="payout_sent",
+        language=lang,
+        amount=amount,
+        upi=upi_id,
+        ref=ref
+    )

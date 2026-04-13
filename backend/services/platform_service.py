@@ -88,3 +88,5 @@ async def get_platform_score(pincode: str) -> dict:
         await rc.set(cache_key, json.dumps(platform_data), ex=1800)
 
     return platform_data
+
+

@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 
 from utils.db import get_supabase
 from utils.datetime_utils import is_within_shift
+from services.payout_service import calculate_payout as svc_calculate_payout
 
 logger = logging.getLogger("gigkavach.payouts")
 router = APIRouter(tags=["Payouts & SLA"])
@@ -181,11 +182,16 @@ def _get_worker(worker_id: str) -> dict | None:
                 plan_map = {"basic": ("Basic", 0.4), "plus": ("Plus", 0.5), "pro": ("Pro", 0.7)}
                 plan_key = row.get("plan", "basic").lower()
                 plan_label, _ = plan_map.get(plan_key, ("Basic", 0.4))
+                
+                # Dynamically fetch the baseline from the baseline service
+                from services.baseline_service import get_worker_baseline
+                baseline = get_worker_baseline(worker_id, plan=plan_key)
+
                 return {
-                    "baseline_earnings": 1000.0,  # TODO: fetch from baseline_service
+                    "baseline_earnings": baseline,
                     "plan_tier": plan_label,
                     "shift": row.get("shift", "Morning"),
-                    "history": {"avg_hourly": 125.0, "current_hour_velocity": 130.0},
+                    "history": {"avg_hourly": baseline / 8, "current_hour_velocity": (baseline / 8) * 1.05},
                 }
     except Exception as e:
         logger.warning(f"[PAYOUTS] DB lookup failed for {worker_id}: {e}. Using fallback.")
@@ -248,57 +254,43 @@ async def calculate_payout(request: PayoutRequest):
     tier_multiplier = PLAN_MULTIPLIERS.get(plan_tier, 0.4)
     hourly_rate = baseline_earnings / 8.0
 
-    # 1. Split into daily segments
-    segments = split_disruption_by_midnight(request.disruption_start, request.disruption_end)
-    
-    total_payout = 0.0
-    daily_breakdown = []
-    total_duration = 0.0
-    
-    from services.platform_service import get_platform_surge
+    # 1. Calculate duration (in hours)
+    duration_td = request.disruption_end - request.disruption_start
+    total_duration = max(0.0, duration_td.total_seconds() / 3600.0)
 
-    for seg_start, seg_end in segments:
-        duration_td = seg_end - seg_start
-        seg_duration = max(0.0, duration_td.total_seconds() / 3600.0)
-        total_duration += seg_duration
-        
-        # 2. XGBoost Model inference (ML Predicted surge based on DCI)
-        # Using the same DCI for all segments for now as per current core engine
-        base_mult = 1.0 + (request.dci_score / 100.0) + (seg_duration * 0.1)
-        pred_mult = round(min(max(base_mult, 1.0), 5.0), 2)
-        
-        # 3. Platform Surge logic (Image #3 & #5 Requirement)
-        platform_surge = 1.0
-        surge_eligible = False
-        if overlaps_surge_window(worker["shift"], seg_start):
-            platform_surge = get_platform_surge(request.pincode, request.dci_score, seg_start)
-            hist = worker["history"]
-            # Qualified worker = earnings velocity > avg (active during surge)
-            if hist["current_hour_velocity"] > (hist["avg_hourly"] * 1.1):
-                 surge_eligible = True
-        
-        final_surge = platform_surge if surge_eligible else 1.0
-        
-        # 4. Calculation for this segment
-        seg_payout = round(hourly_rate * seg_duration * pred_mult * final_surge * tier_multiplier, 2)
-        total_payout += seg_payout
-        
-        daily_breakdown.append({
-            "date": seg_start.date().isoformat(),
-            "hours": round(seg_duration, 2),
-            "payout": seg_payout,
-            "surge_applied": final_surge > 1.0
-        })
+    # 2. Get Surge Multiplier from Production ML Service (XGBoost v3)
+    # This unified logic replaces the previous hardcoded formula
+    try:
+        payout_result = svc_calculate_payout(
+            baseline_earnings=baseline_earnings,
+            disruption_duration=int(total_duration * 60), # in minutes
+            dci_score=request.dci_score,
+            worker_id=request.worker_id,
+            city=worker.get("city", "Bengaluru"), # City-aware resolution
+            zone_density="Mid",
+            shift=plan_tier.capitalize(),
+            disruption_type="Rain", # Default for this endpoint simulation
+            hour_of_day=request.disruption_start.hour,
+            day_of_week=request.disruption_start.weekday()
+        )
+        payout_amount = payout_result["payout"]
+        multiplier = payout_result["multiplier"]
+    except Exception as e:
+        logger.error(f"Unified payout calculation failed: {e}")
+        # Fallback to safety baseline
+        payout_amount = round(hourly_rate * total_duration * tier_multiplier * 1.5, 2)
+        multiplier = 1.5
 
     return PayoutResponse(
         worker_id=request.worker_id,
-        payout_amount=round(total_payout, 2),
+        payout_amount=payout_amount,
         breakdown={
             "total_duration_hours": round(total_duration, 2),
             "plan_tier": plan_tier,
             "tier_coverage_multiplier": tier_multiplier,
-            "daily_split": daily_breakdown,
-            "dci_score_registered": request.dci_score
+            "ml_multiplier": multiplier,
+            "dci_score_registered": request.dci_score,
+            "audit_ref": "MODEL_V3_SYNTHESIS"
         }
     )
 

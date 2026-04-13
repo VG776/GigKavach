@@ -1,7 +1,7 @@
 {
   "model_name": "GigKavach_Dynamic_Premium_HGB_v1",
   "objective": "poisson",
-  "created_at": "2026-04-13T12:34:31.148029",
+  "created_at": "2026-04-13T22:54:10.984387",
   "features": [
     "worker_gig_score",
     "pincode_30d_avg_dci",
@@ -17,10 +17,10 @@
   "metrics": {
     "test_r2": 0.8839747482938091,
     "test_mae": 0.021964669709878072,
-    "test_rmse": 0.028902753397833245,
+    "test_rmse": 0.028902753397833252,
     "train_r2": 0.8964294103276117,
     "train_mae": 0.020876896361860565,
-    "train_rmse": 0.027379152609860142
+    "train_rmse": 0.027379152609860145
   },
   "premium_validation": {
     "base_price_basic": 30,

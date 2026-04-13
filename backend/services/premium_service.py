@@ -75,11 +75,11 @@ async def _derive_zone_metrics(pincode: str) -> tuple[float, float]:
         from datetime import datetime, timedelta
         thirty_days_ago = (datetime.utcnow() - timedelta(days=30)).isoformat()
         
-        result = sb.table("dci_logs").select("dci_score").eq("pincode", pincode)\
-            .gte("updated_at", thirty_days_ago).execute()
+        result = sb.table("dci_logs").select("total_score").eq("pincode", pincode)\
+            .gte("created_at", thirty_days_ago).execute()
         
         if result.data and len(result.data) > 0:
-            dci_scores = [float(row.get("dci_score", 0)) for row in result.data]
+            dci_scores = [float(row.get("total_score", 0)) for row in result.data]
             avg_dci = sum(dci_scores) / len(dci_scores)
         else:
             # Fallback: use current DCI or safe default
