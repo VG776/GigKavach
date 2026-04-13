@@ -12,6 +12,15 @@ import Login from './pages/Login';
 import ProtectedRoute from './components/ProtectedRoute';
 import { JudgeConsole } from './components/demo/JudgeConsole';
 import { API_CONFIG } from './utils/constants';
+// PWA Worker Pages
+import { WorkerProfile } from './pages/worker-pwa/Profile';
+import { WorkerStatus } from './pages/worker-pwa/Status';
+import { WorkerHistory } from './pages/worker-pwa/History';
+// Shareable Link Pages
+import { SharedLinkRoute } from './components/SharedLinkRoute';
+import ProfileShare from './pages/link/ProfileShare';
+import StatusShare from './pages/link/StatusShare';
+import HistoryShare from './pages/link/HistoryShare';
 
 // Protected Layout wrapper
 const ProtectedLayout = ({ children }) => {
@@ -132,6 +141,37 @@ export default function App() {
     <Routes>
       {/* Public Routes */}
       <Route path="/login" element={<Login />} />
+      
+      {/* Shareable Link Routes (Token-authenticated) */}
+      <Route path="/link/:shareToken/profile" element={<ProfileShare />} />
+      <Route path="/link/:shareToken/status" element={<StatusShare />} />
+      <Route path="/link/:shareToken/history" element={<HistoryShare />} />
+      
+      {/* PWA Worker Routes */}
+      <Route
+        path="/worker/profile"
+        element={
+          <ProtectedRoute>
+            <WorkerProfile />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/worker/status"
+        element={
+          <ProtectedRoute>
+            <WorkerStatus />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/worker/history"
+        element={
+          <ProtectedRoute>
+            <WorkerHistory />
+          </ProtectedRoute>
+        }
+      />
       
       {/* Protected Routes */}
       <Route
