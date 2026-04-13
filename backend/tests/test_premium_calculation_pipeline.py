@@ -103,7 +103,7 @@ class TestModelTraining:
         # Validate model exists and has expected attributes
         assert model is not None
         assert hasattr(model, 'predict')
-        assert hasattr(model, 'feature_importances_')
+        # HistGradientBoostingRegressor does not have feature_importances_ attribute
         
         # Validate metadata
         assert "metrics" in metadata
@@ -225,7 +225,7 @@ class TestInference:
     
     def test_inference_with_sample_features(self):
         """Test inference with sample worker features."""
-        from backend.ml.train_premium_model import load_ai_model
+        from services.premium_service import load_ai_model
         import pandas as pd
         import numpy as np
         

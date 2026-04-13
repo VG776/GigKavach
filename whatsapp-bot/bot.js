@@ -183,56 +183,42 @@ client.on('ready', () => {
 
 /**
  * Message Handler - Main inbound message processor
+ * FORWARDS TO BACKEND WEBHOOK (Centralized Logic)
  */
 client.on('message', async (msg) => {
   try {
-    // Ignore group messages
-    if (msg.from.endsWith('@g.us')) {
-      log.debug(`Ignoring group message from ${msg.from}`);
-      return;
-    }
+    // Ignore group messages and status broadcasts
+    if (msg.from.endsWith('@g.us') || msg.from === 'status@broadcast') return;
 
-    // Ignore status broadcasts
-    if (msg.from === 'status@broadcast') {
-      log.debug('Ignoring status broadcast');
-      return;
-    }
-
-    // Extract phone and message
-    const phoneWithSuffix = msg.from;
-    const phone = phoneWithSuffix.replace('@c.us', '');
+    const phone = msg.from.replace('@c.us', '');
     const messageBody = msg.body.trim();
 
-    log.message(`Received from ${phone}: "${messageBody.substring(0, 60)}${messageBody.length > 60 ? '...' : ''}"`);
-    console.log(`[MESSAGE_RECEIVED] From: ${phone}, Body: ${messageBody}, Type: ${msg.type}`);
+    log.message(`Received from ${phone}: "${messageBody.substring(0, 40)}..."`);
 
-    // Route message to appropriate handler
-    const response = await routeMessage(phone, messageBody);
-
-    if (response && response.text) {
-      // Send reply
-      await msg.reply(response.text);
-      log.message(`Replied to ${phone}: "${response.text.substring(0, 50)}${response.text.length > 50 ? '...' : ''}"`);
-      console.log(`[MESSAGE_SENT] To: ${phone}, Text: ${response.text.substring(0, 50)}`);
-
-      // Update session if needed
-      if (response.updateSession) {
-        SessionManager.updateSession(phone, response.sessionData);
-        console.log(`[SESSION_UPDATED] Phone: ${phone}, Data:`, response.sessionData);
-      }
-    } else {
-      log.warn(`No response generated for message from ${phone}`);
-    }
-  } catch (error) {
-    log.error(`Message handler error: ${error.message}`);
-    console.error(`[MESSAGE_HANDLER_ERROR]`, error);
+    // ── Forward to Backend Webhook ──────────────────────────────────────────
+    // The Python backend handles state, Redis, and business logic.
+    // It will call our /send-message API to reply.
     try {
-      await msg.reply(
-        '⚠️ Something went wrong. Please try again or contact support.\n\nFor help, send: HELP'
-      );
-    } catch (replyError) {
-      log.error(`Failed to send error reply: ${replyError.message}`);
+      const response = await fetch(`${BACKEND_URL}/api/v1/whatsapp/webhook`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: phone,
+          body: messageBody,
+          timestamp: new Date().toISOString()
+        }),
+      });
+
+      if (!response.ok) {
+        log.error(`Backend webhook failed: ${response.status}`);
+      }
+    } catch (backendError) {
+      log.error(`Failed to reach backend: ${backendError.message}`);
+      await msg.reply('⚠️ GigKavach backend is temporarily offline. Please try again in a moment.');
     }
+
+  } catch (error) {
+    log.error(`Message processing error: ${error.message}`);
   }
 });
 

@@ -37,6 +37,7 @@ from api.whatsapp_integration import router as whatsapp_integration_router
 from api.auth import router as auth_router         # Authentication routes
 from api.premium import router as premium_router
 from api.share_tokens import router as share_tokens_router
+from api.webhooks import router as webhooks_router
 
 
 # ─── Logging Setup ────────────────────────────────────────────────────────────
@@ -257,7 +258,8 @@ app.include_router(payouts_router, prefix="/api/v1")        # Consolidated prefi
 app.include_router(fraud_router, prefix="/api/v1")          # Vijeth — fraud assessment
 app.include_router(premium_router, prefix="/api/v1")        # Dynamic Premium Model
 app.include_router(share_tokens_router, prefix="/api/v1")   # Share tokens for PWA links
-# TODO: app.include_router(dashboard_router, prefix="/api/v1")  # V Saatwik — admin metrics
+app.include_router(webhooks_router, prefix="/api/v1")       # Razorpay Payout Webhooks
+# Dashboard & Monitoring (Standardized to /api/v1)
 
 
 # ─── Root Redirect ────────────────────────────────────────────────────────────

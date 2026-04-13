@@ -1,3 +1,4 @@
+import asyncio
 """
 tests/test_fraud_gigscore_premium_trinity.py
 ─────────────────────────────────────────────────────────────
@@ -10,6 +11,7 @@ import sys
 import unittest
 from unittest.mock import MagicMock, patch
 import json
+import numpy as np
 
 BACKEND_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BACKEND_ROOT)
@@ -107,7 +109,7 @@ class TestFraudGigScorePremiumTrinity(unittest.TestCase):
             self.assertEqual(new_score, 100.0)
         
         # 3. Quote should reflect excellent score
-        quote = compute_dynamic_quote(self.worker_id, "basic")
+        quote = asyncio.run(compute_dynamic_quote(self.worker_id, "basic"))
         self.assertEqual(quote["base_premium"], 30.0)
         # High score → should have discount
         self.assertLess(quote["dynamic_premium"], 30.0)
@@ -135,9 +137,9 @@ class TestFraudGigScorePremiumTrinity(unittest.TestCase):
         # Mock worker with initial high score
         mock_sb.table().select().eq().execute.return_value.data = [self.mock_worker]
         
-        # Mock ML model
+        # Mock ML model: More discount for higher GigScore
         mock_model = MagicMock()
-        mock_model.predict.return_value = [0.10]  # 10% discount
+        mock_model.predict.side_effect = lambda df: np.array([0.15 if df.iloc[0]["worker_gig_score"] > 90 else 0.05])
         mock_load_model.return_value = (mock_model, {})
         
         # Mock fraud detector - TIER 1 FLAGS
@@ -154,8 +156,10 @@ class TestFraudGigScorePremiumTrinity(unittest.TestCase):
         mock_fraud_detector.return_value = mock_detector
         
         # 1. Check fraud - should FLAG_50
-        fraud_service = FraudDetectionService()
-        fraud_result = fraud_service.check_fraud(self.mock_claim, {})
+        with patch("services.gigscore_service.get_supabase") as mock_sb_gs:
+            mock_sb_gs.return_value = mock_sb  # Reuse the same mock
+            fraud_service = FraudDetectionService()
+            fraud_result = fraud_service.check_fraud(self.mock_claim, {})
         
         self.assertEqual(fraud_result['decision'], 'FLAG_50')
         self.assertEqual(fraud_result['is_fraud'], True)
@@ -180,10 +184,10 @@ class TestFraudGigScorePremiumTrinity(unittest.TestCase):
             mock_sb_quote.return_value.table().select().eq().execute.return_value.data = [
                 {**self.mock_worker, "gig_score": 87.5}
             ]
-            quote = compute_dynamic_quote(self.worker_id, "basic")
+            quote = asyncio.run(compute_dynamic_quote(self.worker_id, "basic"))
             
             # Premium should be affected (less discount than high-score case)
-            self.assertLess(quote["discount_applied"], 0.10 * 30)
+            self.assertLess(quote["discount_applied"], 4.5)
             # Account should remain active (still > 30)
             # (In actual flow, this would be checked)
             
@@ -236,8 +240,10 @@ class TestFraudGigScorePremiumTrinity(unittest.TestCase):
         mock_fraud_detector.return_value = mock_detector
         
         # 1. Check fraud - should BLOCK
-        fraud_service = FraudDetectionService()
-        fraud_result = fraud_service.check_fraud(self.mock_claim, {})
+        with patch("services.gigscore_service.get_supabase") as mock_sb_gs:
+            mock_sb_gs.return_value = mock_sb
+            fraud_service = FraudDetectionService()
+            fraud_result = fraud_service.check_fraud(self.mock_claim, {})
         
         self.assertEqual(fraud_result['decision'], 'BLOCK')
         self.assertEqual(fraud_result['is_fraud'], True)
@@ -279,16 +285,16 @@ class TestFraudGigScorePremiumTrinity(unittest.TestCase):
         mock_sb = MagicMock()
         mock_get_sb.return_value = mock_sb
         
-        # Mock ML model
+        # Mock ML model: More discount for higher GigScore
         mock_model = MagicMock()
-        mock_model.predict.return_value = [0.15]  # 15% discount
+        mock_model.predict.side_effect = lambda df: np.array([0.15 if df.iloc[0]["worker_gig_score"] > 90 else 0.05])
         mock_load_model.return_value = (mock_model, {})
         
         # Phase 1: Initial high score
         initial_worker = {**self.mock_worker, "gig_score": 95.0}
         mock_sb.table().select().eq().execute.return_value.data = [initial_worker]
         
-        quote_before = compute_dynamic_quote(self.worker_id, "basic")
+        quote_before = asyncio.run(compute_dynamic_quote(self.worker_id, "basic"))
         discount_before = quote_before["discount_applied"]
         
         # Phase 2: After fraud Tier 1 penalty
@@ -322,7 +328,7 @@ class TestFraudGigScorePremiumTrinity(unittest.TestCase):
             mock_sb_quote.return_value.table().select().eq().execute.return_value.data = [
                 {**self.mock_worker, "gig_score": 100.0}
             ]
-            quote_after = compute_dynamic_quote(self.worker_id, "basic")
+            quote_after = asyncio.run(compute_dynamic_quote(self.worker_id, "basic"))
             discount_after = quote_after["discount_applied"]
             
             # Discount should be restored (similar to before fraud)
@@ -340,8 +346,9 @@ class TestFraudGigScorePremiumTrinity(unittest.TestCase):
         Scenario: Multiple workers, different fraud outcomes.
         Ensures that fraud penalties don't cross-pollinate between workers.
         """
+        # Mock ML model: More discount for higher GigScore
         mock_model = MagicMock()
-        mock_model.predict.return_value = [0.10]
+        mock_model.predict.side_effect = lambda df: np.array([0.2 if df.iloc[0]["worker_gig_score"] > 90 else 0.05])
         mock_load_model.return_value = (mock_model, {})
         
         # Worker A: Clean
@@ -355,11 +362,11 @@ class TestFraudGigScorePremiumTrinity(unittest.TestCase):
         
         # Get Worker A quote (high score, good discount)
         mock_sb.table().select().eq().execute.return_value.data = [worker_a]
-        quote_a_before = compute_dynamic_quote("worker-a", "basic")
+        quote_a_before = asyncio.run(compute_dynamic_quote("worker-a", "basic"))
         
         # Get Worker B quote (moderate score, lower discount)
         mock_sb.table().select().eq().execute.return_value.data = [worker_b]
-        quote_b_before = compute_dynamic_quote("worker-b", "basic")
+        quote_b_before = asyncio.run(compute_dynamic_quote("worker-b", "basic"))
         
         # Apply fraud penalty to Worker B only
         with patch("services.gigscore_service.get_supabase") as mock_sb_score:
@@ -369,16 +376,19 @@ class TestFraudGigScorePremiumTrinity(unittest.TestCase):
             new_score_b = update_gig_score("worker-b", GigScoreEvent.FRAUD_TIER_1, {})
             self.assertEqual(new_score_b, 42.5)
         
+        # Update worker_b object for the next mock call
+        worker_b["gig_score"] = new_score_b
+        
         # Get Worker A quote again (should be unchanged)
         mock_sb.table().select().eq().execute.return_value.data = [worker_a]
-        quote_a_after = compute_dynamic_quote("worker-a", "basic")
+        quote_a_after = asyncio.run(compute_dynamic_quote("worker-a", "basic"))
         
         # Get Worker B quote again (should show impact)
         mock_sb.table().select().eq().execute.return_value.data = [worker_b]
-        quote_b_after = compute_dynamic_quote(
+        quote_b_after = asyncio.run(compute_dynamic_quote(
             "worker-b",
             "basic"
-        )
+        ))
         
         # Worker A's quote should be unchanged
         self.assertEqual(quote_a_before["discount_applied"], quote_a_after["discount_applied"])

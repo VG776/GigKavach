@@ -24,6 +24,8 @@ from typing import List, Dict, Any
 from config.city_dci_weights import normalise_city_name, resolve_city_from_pincode
 from services.fraud_service import check_fraud
 from services.payout_service import calculate_payout
+from services.razorpay_payout_service import initiate_payout
+from services.whatsapp_service import notify_worker
 from utils.supabase_client import get_supabase
 from config.settings import settings
 
@@ -188,71 +190,97 @@ def _get_worker_history(worker_id: str) -> Dict[str, Any]:
         }
 
 
-def _trigger_payment(claim_id: str, worker_id: str, payout_amount: float):
+async def _trigger_payment(claim_id: str, worker_id: str, payout_amount: float, payout_multiplier: float):
     """
-    Trigger payment through payment gateway (Razorpay/Stripe).
-    
-    TODO: Integrate with actual payment provider.
-    For now, just log the intent.
+    Trigger payment through RazorpayX by creating a payout record first.
     """
-    logger.info(
-        f"[PAYMENT TRIGGER] claim={claim_id} | "
-        f"worker={worker_id} | amount=₹{payout_amount:.0f}"
-    )
+    logger.info(f"🚀 [PAYMENT TRIGGER] Initiating disbursement for claim {claim_id}")
     
-    # TODO: Call payment service
-    # - Create payout order in Razorpay
-    # - Link to worker's bank account on file
-    # - Track payment status
-    # - Handle retries and failures
-    
-    return {
-        "payment_triggered": True,
-        "claim_id": claim_id,
-        "worker_id": worker_id,
-        "amount": payout_amount
-    }
+    try:
+        sb = get_supabase()
+        
+        # 1. Create entry in 'payouts' table (The disbursement ledger)
+        payout_data = {
+            "worker_id": worker_id,
+            "claim_id": claim_id,
+            "disruption_date": datetime.date.today().isoformat(),
+            "final_amount": payout_amount,
+            "surge_multiplier": payout_multiplier,
+            "status": "pending",
+            "triggered_at": datetime.datetime.utcnow().isoformat()
+        }
+        
+        res = sb.table("payouts").insert(payout_data).execute()
+        if not res.data:
+            logger.error(f"Failed to create payout record for claim {claim_id}")
+            return None
+            
+        payout_id = res.data[0]["id"]
+        
+        # 2. Call Razorpay Payout Service
+        # This function handles Contact/FundAccount creation + Payout initiation
+        resp = await initiate_payout(payout_id)
+        
+        # 3. Update claim record with the RZP reference for traceability
+        sb.table("claims").update({
+            "rzp_payout_id": resp.get("id"),
+            "payout_status": resp.get("status")
+        }).eq("id", claim_id).execute()
+        
+        return resp
+        
+    except Exception as e:
+        logger.error(f"Payment trigger failed for claim {claim_id}: {e}")
+        return None
 
 
-def _send_whatsapp_alert(worker_id: str, claim_id: str, decision: str, 
-                         payout_amount: float, fraud_score: float):
+async def _send_whatsapp_alert(worker_id: str, claim_id: str, decision: str, 
+                         payout_amount: float = 0, fraud_score: float = 0):
     """
-    Send WhatsApp notification to worker about claim decision.
-    
-    TODO: Integrate with Twilio WhatsApp Business API.
+    Send multilingual WhatsApp notification using the unified service.
     """
-    message = None
-    
-    if decision == "APPROVED":
-        message = (
-            f"✅ Your disruption claim #{claim_id} has been approved!\n"
-            f"Payout: ₹{payout_amount:.0f}\n"
-            f"Confidence: {(1 - fraud_score) * 100:.0f}%\n"
-            f"Payment processing..."
-        )
-    elif decision == "REJECTED_FRAUD":
-        message = (
-            f"⚠️ Your claim #{claim_id} shows unusual patterns.\n"
-            f"Please contact support on our app for details."
-        )
-    elif decision == "REJECTED_INELIGIBLE":
-        message = (
-            f"ℹ️ Your claim #{claim_id} doesn't meet eligibility criteria.\n"
-            f"Check your account settings or contact support."
-        )
-    
-    if message:
-        logger.info(f"[WHATSAPP] worker={worker_id} | {message[:50]}...")
-    
-    # TODO: Call Twilio WhatsApp API
-    return {"whatsapp_sent": message is not None}
+    try:
+        sb = get_supabase()
+        
+        # Fetch worker phone and language
+        worker_res = sb.table("workers").select("phone_number, language, upi_id").eq("id", worker_id).single().execute()
+        if not worker_res.data:
+            return False
+            
+        phone = worker_res.data["phone_number"]
+        lang = worker_res.data.get("language", "en")
+        upi = worker_res.data.get("upi_id", "your UPI")
+        
+        if decision == "APPROVED":
+            return await notify_worker(
+                phone_number=phone,
+                message_key="payout_sent",
+                language=lang,
+                amount=payout_amount,
+                upi=upi,
+                ref=claim_id[:8].upper()
+            )
+        elif decision == "REJECTED_FRAUD":
+            # For fraud, we use a generic warning or existing template
+            return await notify_worker(
+                phone_number=phone,
+                message_key="upi_failed", # Re-using failure alert for context
+                language=lang,
+                amount=0,
+                upi="Account Flagged"
+            )
+            
+        return False
+    except Exception as e:
+        logger.error(f"WhatsApp alert failed for {worker_id}: {e}")
+        return False
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # MAIN PIPELINE
 # ──────────────────────────────────────────────────────────────────────────────
 
-def process_single_claim(claim: Dict[str, Any]) -> Dict[str, Any]:
+async def process_single_claim(claim: Dict[str, Any]) -> Dict[str, Any]:
     """
     Process a single claim through fraud detection and payout pipeline.
     
@@ -324,7 +352,7 @@ def process_single_claim(claim: Dict[str, Any]) -> Dict[str, Any]:
                 is_fraud=True
             )
             
-            _send_whatsapp_alert(
+            await _send_whatsapp_alert(
                 worker_id=worker_id,
                 claim_id=claim_id,
                 decision="REJECTED_FRAUD",
@@ -380,10 +408,10 @@ def process_single_claim(claim: Dict[str, Any]) -> Dict[str, Any]:
         
         # ──── 6. Trigger Payment ────
         if payout_amount > 0:
-            _trigger_payment(claim_id, worker_id, payout_amount)
+            await _trigger_payment(claim_id, worker_id, payout_amount, multiplier)
         
         # ──── 7. Send Notifications ────
-        _send_whatsapp_alert(
+        await _send_whatsapp_alert(
             worker_id=worker_id,
             claim_id=claim_id,
             decision="APPROVED",
@@ -470,7 +498,7 @@ async def trigger_claims_pipeline():
     }
     
     for claim in pending_claims:
-        result = process_single_claim(claim)
+        result = await process_single_claim(claim)
         results["claims"].append(result)
         
         if result.get("status") == "approved":

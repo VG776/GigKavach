@@ -1,3 +1,4 @@
+import asyncio
 """
 tests/integrated_premium_gigscore_test.py
 ─────────────────────────────────────────────────────────────
@@ -91,7 +92,7 @@ class TestGigScorePremiumIntegration(unittest.TestCase):
             "id": self.worker_id, "gig_score": 95.0, "shift": "day", "pin_codes": ["560001"], "plan": "pro"
         }]
         
-        quote = compute_dynamic_quote(self.worker_id, "pro")
+        quote = asyncio.run(compute_dynamic_quote(self.worker_id, "pro"))
         
         self.assertEqual(quote["base_premium"], 44.0)
         self.assertLess(quote["dynamic_premium"], 44.0)
@@ -103,7 +104,7 @@ class TestGigScorePremiumIntegration(unittest.TestCase):
         }]
         
         # Manually verify NLP reasoning for low score
-        quote = compute_dynamic_quote(self.worker_id, "basic")
+        quote = asyncio.run(compute_dynamic_quote(self.worker_id, "basic"))
         self.assertIn("Improve your GigScore", quote["insights"]["reason"])
 
         # Test Case 3: High Risk Zone (Bonus Coverage Trigger)
@@ -136,7 +137,7 @@ class TestGigScorePremiumIntegration(unittest.TestCase):
             mock_sb.table().select().eq().execute.return_value.data = [{
                 "id": self.worker_id, "gig_score": s, "shift": "night", "pin_codes": ["560001"], "plan": "basic"
             }]
-            quote = compute_dynamic_quote(self.worker_id, "basic")
+            quote = asyncio.run(compute_dynamic_quote(self.worker_id, "basic"))
             premiums.append(quote["dynamic_premium"])
 
         # Actuarial check: Higher scores should result in lower or equal premiums
