@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Search, Eye, Shield, SlidersHorizontal } from 'lucide-react';
-import { formatPhoneNumber, getInitials } from '../utils/formatters';
+import { Search, Eye, Shield, SlidersHorizontal, TrendingDown } from 'lucide-react';
+import { formatPhoneNumber, getInitials, formatCurrency } from '../utils/formatters';
 import { workerAPI } from '../api/workers';
+import { premiumAPI } from '../api/premium';
 import { WorkerModal } from '../components/workers/WorkerModal';
 /*
 const [selectedWorker, setSelectedWorker] = useState(null);
@@ -79,6 +80,7 @@ const [isModalOpen, setIsModalOpen] = useState(false);
 
   const [workers, setWorkers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [premiumData, setPremiumData] = useState({});
 
   // ✅ pagination state (MUST be at top)
   const [currentPage, setCurrentPage] = useState(1);
@@ -110,6 +112,10 @@ const [isModalOpen, setIsModalOpen] = useState(false);
         zone: w.zone || 'N/A',
         status: w.status || 'inactive',
         plan: w.plan || 'Shield Basic',
+        gig_score: w.gig_score || 0,
+        portfolio_score: w.portfolio_score || 0,
+        platform: w.gig_platform || w.platform || 'Zomato',
+        shift: w.shift || 'Flexible',
         premium:
           w.plan === 'basic' || !w.plan
             ? 69
@@ -146,6 +152,31 @@ const [isModalOpen, setIsModalOpen] = useState(false);
   useEffect(() => {
     fetchWorkers();
   }, []);
+
+  // Fetch premium data for paginated workers
+  // TODO: Premium data fetch temporarily disabled - will be re-enabled after fixing API validation
+  // useEffect(() => {
+  //   const fetchPremiumDataForWorkers = async () => {
+  //     const quotes = {};
+  //     for (const worker of paginatedWorkers) {
+  //       if (!worker.id || worker.id.trim() === '') {
+  //         continue;
+  //       }
+  //       try {
+  //         const quote = await premiumAPI.getQuote(worker.id, worker.plan);
+  //         quotes[worker.id] = quote;
+  //       } catch (err) {
+  //         console.warn(`[WORKERS] Failed to fetch premium for worker ${worker.id}:`, err);
+  //         quotes[worker.id] = null;
+  //       }
+  //     }
+  //     setPremiumData(quotes);
+  //   };
+
+  //   if (paginatedWorkers.length > 0) {
+  //     fetchPremiumDataForWorkers();
+  //   }
+  // }, [paginatedWorkers]);
 
   // ✅ FILTERING
   const filteredWorkers = useMemo(() => {
@@ -302,10 +333,25 @@ const [isModalOpen, setIsModalOpen] = useState(false);
                   Zone
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                  Gig Score
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                  Portfolio
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                  Platform
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                  Shift
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
                   Status
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
                   Shield Policy
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                  Dynamic Premium
                 </th>
                 <th className="px-6 py-3 text-right text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
                   Actions
@@ -335,6 +381,26 @@ const [isModalOpen, setIsModalOpen] = useState(false);
                     </div>
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300">{worker.zone}</td>
+                  <td className="px-6 py-4">
+                    <span className="inline-block px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-sm font-semibold">
+                      {worker.gig_score}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className="inline-block px-2.5 py-1 rounded-lg bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-sm font-semibold">
+                      {worker.portfolio_score}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className="inline-block px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium">
+                      {worker.platform}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className="inline-block px-2.5 py-1 rounded-lg bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 text-sm font-medium">
+                      {worker.shift}
+                    </span>
+                  </td>
                   <td className="px-6 py-4">
                     <span
                       className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
@@ -368,6 +434,30 @@ const [isModalOpen, setIsModalOpen] = useState(false);
                       </div>
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{worker.coverage}% coverage</p>
                     </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    {premiumData[worker.id] ? (
+                      <div className="text-sm">
+                        <div className="flex items-center gap-2">
+                          {premiumData[worker.id].discount_applied > 0 && (
+                            <span className="text-xs font-semibold text-green-600 dark:text-green-400 flex items-center gap-1">
+                              <TrendingDown className="w-3 h-3" />
+                              -{premiumData[worker.id].discount_applied}%
+                            </span>
+                          )}
+                          <span className="font-semibold text-gray-900 dark:text-white">
+                            {formatCurrency(premiumData[worker.id].dynamic_premium)}
+                          </span>
+                        </div>
+                        {premiumData[worker.id].bonus_coverage_hours > 0 && (
+                          <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
+                            +{premiumData[worker.id].bonus_coverage_hours}h bonus
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="h-5 w-24 bg-gray-200/50 dark:bg-gray-700 rounded animate-pulse" />
+                    )}
                   </td>
                   <td className="px-6 py-4 text-right">
                     <button

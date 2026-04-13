@@ -36,6 +36,7 @@ from api.whatsapp import router as whatsapp_router
 from api.whatsapp_integration import router as whatsapp_integration_router
 from api.auth import router as auth_router         # Authentication routes
 from api.premium import router as premium_router
+from api.share_tokens import router as share_tokens_router
 
 
 # ─── Logging Setup ────────────────────────────────────────────────────────────
@@ -203,6 +204,7 @@ cors_origins = [
     "http://localhost:5173",           # Fallback Vite port
     "http://127.0.0.1:3000",           # Localhost IPv4
     "http://127.0.0.1:5173",           # Localhost IPv4 fallback
+    "https://gig-kavach-beryl.vercel.app/"
 ]
 
 # Add environment-specific origins
@@ -254,6 +256,7 @@ app.include_router(whatsapp_integration_router, prefix="/api/v1")  # Bot service
 app.include_router(payouts_router, prefix="/api/v1")        # Consolidated prefix
 app.include_router(fraud_router, prefix="/api/v1")          # Vijeth — fraud assessment
 app.include_router(premium_router, prefix="/api/v1")        # Dynamic Premium Model
+app.include_router(share_tokens_router, prefix="/api/v1")   # Share tokens for PWA links
 # TODO: app.include_router(dashboard_router, prefix="/api/v1")  # V Saatwik — admin metrics
 
 

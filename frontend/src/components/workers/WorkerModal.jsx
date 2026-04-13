@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { X, Phone, MapPin, Clock, Zap, DollarSign, Activity } from 'lucide-react';
 import { formatPhoneNumber, formatCurrency, getInitials } from '../../utils/formatters';
 import { workerAPI } from '../../api/workers';
+import { PremiumQuote } from '../premium/PremiumQuote';
 
 export function WorkerModal({ workerId, isOpen, onClose }) {
   const [workerData, setWorkerData] = useState(null);
@@ -194,6 +195,14 @@ export function WorkerModal({ workerId, isOpen, onClose }) {
                   <p className="text-lg font-bold text-blue-700 dark:text-blue-400">{workerData?.coverage}%</p>
                 </div>
               </div>
+            </section>
+
+            <section>
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                <DollarSign className="w-4 h-4 text-gigkavach-orange" />
+                Dynamic Premium Calculator
+              </h3>
+              <PremiumQuote workerId={workerId} selectedPlan="basic" />
             </section>
 
             <section>

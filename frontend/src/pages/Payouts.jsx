@@ -1,10 +1,11 @@
-import { useState, useMemo, useEffect } from 'react';
-import { ChevronDown, ChevronUp, Zap, Shield, AlertTriangle, Check } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { ChevronDown, ChevronUp, Zap, Shield, AlertTriangle, Check, TrendingDown, Gift } from 'lucide-react';
 import { formatCurrency, formatPercentage, formatDate } from '../utils/formatters';
 import { Button } from '../components/common/Button';
 import { RealTimePayoutFeed } from '../components/payouts/RealTimePayoutFeed';
 import { WorkerModal } from '../components/workers/WorkerModal';
 import { payoutAPI } from '../api/payouts';
+import { premiumAPI } from '../api/premium';
 
 // Fallback mock data for when API is unavailable
 const mockPayouts = [
@@ -28,6 +29,8 @@ export const Payouts = () => {
   const [workerModalOpen, setWorkerModalOpen] = useState(false);
   const [payouts, setPayouts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [premiumData, setPremiumData] = useState({});
+  const [expandedRow, setExpandedRow] = useState(null);
 
   // Fetch live payouts from dashboard API
   useEffect(() => {
@@ -67,6 +70,33 @@ export const Payouts = () => {
 
     fetchPayouts();
   }, []);
+
+  // Fetch premium data for payouts
+  useEffect(() => {
+    const fetchPremiumForPayouts = async () => {
+      // TODO: Premium data fetch temporarily disabled
+      // May be causing 422 validation errors
+      setPremiumData({});
+      // const premiums = {};
+      // for (const payout of payouts) {
+      //   // Use worker_id from payout for premium quotes
+      //   const workerId = payout.worker_id || payout.id;
+      //   if (workerId && workerId.trim() !== '') {
+      //     try {
+      //       const quote = await premiumAPI.getQuote(workerId, payout.tier?.toLowerCase().replace('shield ', '') || 'basic');
+      //       premiums[payout.id] = quote;
+      //     } catch (err) {
+      //       console.warn(`[PAYOUTS] Failed to fetch premium for payout ${payout.id}:`, err);
+      //     }
+      //   }
+      // }
+      // setPremiumData(premiums);
+    };
+
+    if (payouts.length > 0) {
+      fetchPremiumForPayouts();
+    }
+  }, [payouts]);
 
   const stats = [
     { label: 'Total Disbursed', value: formatCurrency(payouts.reduce((sum, p) => sum + (p.amount || 0), 0)) },
@@ -170,7 +200,7 @@ export const Payouts = () => {
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase">Tier</th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase">Trigger</th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase">Amount</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase">Coverage</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase">Premium Breakdown</th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase">UPI Ref</th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase">Date & Time</th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase">Status</th>
@@ -182,7 +212,8 @@ export const Payouts = () => {
                 const statusColor = getStatusColor(payout.status);
                 const tierColor = getTierColor(payout.tier);
                 return (
-                  <tr key={payout.id} className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                  <React.Fragment key={payout.id}>
+                    <tr className="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-gigkavach-orange flex items-center justify-center text-white font-bold text-xs">
@@ -196,7 +227,20 @@ export const Payouts = () => {
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">{payout.trigger}</td>
                     <td className="px-6 py-4 font-mono font-bold text-gray-900 dark:text-white">{formatCurrency(payout.amount)}</td>
-                    <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">{payout.coverage}%</td>
+                    <td className="px-6 py-4">
+                      {premiumData[payout.id] ? (
+                        <button
+                          onClick={() => setExpandedRow(expandedRow === payout.id ? null : payout.id)}
+                          className="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors text-sm font-medium text-gray-700 dark:text-gray-300"
+                        >
+                          <TrendingDown className="w-4 h-4 text-green-600 dark:text-green-400" />
+                          {premiumData[payout.id].discount_applied}% off
+                          {expandedRow === payout.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        </button>
+                      ) : (
+                        <div className="h-4 w-20 bg-gray-200/50 dark:bg-gray-700 rounded animate-pulse" />
+                      )}
+                    </td>
                     <td className="px-6 py-4 text-xs font-mono text-gray-500 dark:text-gray-400">{payout.upiRef}</td>
                     <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400">{formatDate(payout.dateTime, 'datetime')}</td>
                     <td className="px-6 py-4">
@@ -212,6 +256,49 @@ export const Payouts = () => {
                       )}
                     </td>
                   </tr>
+                  {/* Expanded Details Row */}
+                  {expandedRow === payout.id && premiumData[payout.id] && (
+                    <tr className="border-b dark:border-gray-700 bg-blue-50 dark:bg-blue-950/30">
+                      <td colSpan="9" className="px-6 py-4">
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-3 gap-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
+                                <span className="text-sm font-bold text-blue-900 dark:text-blue-100">₹</span>
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-600 dark:text-gray-400">Base Premium</p>
+                                <p className="text-sm font-bold text-gray-900 dark:text-white">{formatCurrency(premiumData[payout.id].base_premium)}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900 flex items-center justify-center">
+                                <TrendingDown className="w-5 h-5 text-green-600 dark:text-green-400" />
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-600 dark:text-gray-400">Discount Applied</p>
+                                <p className="text-sm font-bold text-green-600 dark:text-green-400">{premiumData[payout.id].discount_applied}% off</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-lg bg-orange-100 dark:bg-orange-900 flex items-center justify-center">
+                                <Gift className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-600 dark:text-gray-400">Bonus Hours</p>
+                                <p className="text-sm font-bold text-orange-600 dark:text-orange-400">{premiumData[payout.id].bonus_coverage_hours}h coverage</p>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="border-t dark:border-gray-700 pt-3 text-xs text-gray-600 dark:text-gray-400">
+                            <p>• Discount triggered by high GigScore + favorable DCI in zone</p>
+                            <p>• Bonus hours granted when zone DCI exceeded 65 threshold</p>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
                 );
               })}
             </tbody>

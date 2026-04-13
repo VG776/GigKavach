@@ -10,7 +10,7 @@ import { formatCurrency, formatDate } from '../../utils/formatters';
  */
 export function WorkerHistory() {
   const navigate = useNavigate();
-  const [transactions, setTransactions] = useState<any[]>([]);
+  const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('payouts');
 
@@ -26,7 +26,7 @@ export function WorkerHistory() {
         });
         
         // Transform data for display
-        const formatted = (data?.data || data?.payouts || data || []).map((p: any) => ({
+        const formatted = (data?.data || data?.payouts || data || []).map((p) => ({
           id: p.id,
           type: 'payout',
           amount: p.final_amount || p.amount,
@@ -47,7 +47,7 @@ export function WorkerHistory() {
     fetchHistory();
   }, []);
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status) => {
     switch (status?.toLowerCase()) {
       case 'paid':
       case 'completed':

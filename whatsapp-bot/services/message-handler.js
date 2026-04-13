@@ -7,6 +7,51 @@
 
 import SessionManager from './session-manager.js';
 
+// Backend API URL
+const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000';
+
+// ═════════════════════════════════════════════════════════════════
+// Utility: Generate Share Link Token
+// ═════════════════════════════════════════════════════════════════
+
+async function generateShareLink(workerId, page) {
+  /**
+   * Generate a shareable link for a worker to access their PWA data
+   * @param {string} workerId - Worker ID from database
+   * @param {string} page - Page type: 'profile', 'status', 'history'
+   * @returns {Promise<string>} Full shareable URL or error message
+   */
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/v1/share-tokens/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        worker_id: workerId,
+        expires_in_days: 7,
+        max_uses: 50,
+        reason: `WhatsApp share link for ${page} page`,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      console.error(`[SHARE_LINK_ERROR] Failed to generate token: ${error.message}`);
+      return null;
+    }
+
+    const data = await response.json();
+    // Construct full URL for frontend
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const fullShareUrl = `${frontendUrl}/link/${data.share_token}/${page}`;
+    
+    console.log(`[SHARE_LINK_GENERATED] Worker: ${workerId}, Page: ${page}, URL: ${fullShareUrl}`);
+    return fullShareUrl;
+  } catch (error) {
+    console.error('[SHARE_LINK_GENERATION_ERROR]', error);
+    return null;
+  }
+}
+
 // ═════════════════════════════════════════════════════════════════
 // Message Templates (Inline for simplicity)
 // ═════════════════════════════════════════════════════════════════
@@ -33,8 +78,8 @@ const MESSAGES = {
     hi: `अपनी सुरक्षा योजना चुनें:\n\n🛡️ *Shield Basic* - ₹69/week (40%)\n🛡️ *Shield Plus* - ₹89/week (50%)\n🛡️ *Shield Pro* - ₹99/week (70%)\n\nजवाब दें: basic, plus, या pro`,
   },
   help: {
-    en: `📖 GigKavach Commands:\n\n*JOIN* - Start registration\n*STATUS* - Current coverage & DCI\n*SHIFT* - Update work hours\n*RENEW* - Renew policy\n*LANG* - Change language\n*APPEAL* - Contest a claim\n*HELP* - Show this menu`,
-    hi: `📖 GigKavach आदेश:\n\n*JOIN* - पंजीकरण शुरू करें\n*STATUS* - वर्तमान कवरेज\n*SHIFT* - काम के घंटे अपडेट करें\n*RENEW* - पॉलिसी नवीनीकृत करें\n*LANG* - भाषा बदलें\n*APPEAL* - दावे का विरोध करें\n*HELP* - यह मेनू दिखाएं`,
+    en: `📖 GigKavach Commands:\n\n*JOIN* - Start registration\n*PROFILE* - View your profile 📱\n*STATUS* - Current coverage & DCI 📊\n*HISTORY* - Transaction history 💰\n*SHIFT* - Update work hours\n*RENEW* - Renew policy\n*LANG* - Change language\n*APPEAL* - Contest a claim\n*HELP* - Show this menu`,
+    hi: `📖 GigKavach आदेश:\n\n*JOIN* - पंजीकरण शुरू करें\n*PROFILE* - अपनी प्रोफ़ाइल देखें 📱\n*STATUS* - वर्तमान कवरेज 📊\n*HISTORY* - लेनदेन इतिहास 💰\n*SHIFT* - काम के घंटे अपडेट करें\n*RENEW* - पॉलिसी नवीनीकृत करें\n*LANG* - भाषा बदलें\n*APPEAL* - दावे का विरोध करें\n*HELP* - यह मेनू दिखाएं`,
   },
   already_onboarded: {
     en: `✅ You're already registered with GigKavach!\n\nYour coverage is active. Type *STATUS* to check your protection details.`,
@@ -97,8 +142,65 @@ export async function routeMessage(phone, messageBody) {
 
     if (session.isOnboarded) {
       if (command === 'STATUS') {
+        // Check if looking for shareable link or status info
+        // If user has saved worker_id, generate link; otherwise show text status
+        if (session.worker_id) {
+          const shareLink = await generateShareLink(session.worker_id, 'status');
+          if (shareLink) {
+            return {
+              text: `📊 *Your Live Zone Status*\n\nClick here to view real-time DCI readings and zone disruption index:\n\n${shareLink}\n\n⏰ This link expires in 7 days.\n💡 Shows weather, air quality, heat, and social impact on your zone.`,
+              updateSession: false,
+            };
+          }
+        }
+        
+        // Fallback: Show text status
         const status = `✅ *Current Status*\n\nPlan: ${session.plan || 'Not set'}\nPlatform: ${session.platform || 'Not set'}\nShift: ${session.shift || 'Not set'}\n\nCoverage: Active ✅\n\nFor changes, type the respective command.`;
         return { text: status, updateSession: false };
+      }
+
+      if (command === 'PROFILE') {
+        if (!session.worker_id) {
+          return {
+            text: `⚠️ Unable to generate link. Please contact support.\n\nType *HELP* for more options.`,
+            updateSession: false,
+          };
+        }
+
+        const profileLink = await generateShareLink(session.worker_id, 'profile');
+        if (profileLink) {
+          return {
+            text: `📱 *Your GigKavach Profile*\n\nView your GigScore, zone info, and premium details:\n\n${profileLink}\n\n✨ Share this link with anyone you'd like to show your profile to.\n⏰ Link expires in 7 days.`,
+            updateSession: false,
+          };
+        }
+
+        return {
+          text: `⚠️ Error generating profile link. Please try again later.`,
+          updateSession: false,
+        };
+      }
+
+      if (command === 'HISTORY') {
+        if (!session.worker_id) {
+          return {
+            text: `⚠️ Unable to generate link. Please contact support.`,
+            updateSession: false,
+          };
+        }
+
+        const historyLink = await generateShareLink(session.worker_id, 'history');
+        if (historyLink) {
+          return {
+            text: `💰 *Your Transaction History*\n\nView all your payouts and earnings:\n\n${historyLink}\n\n📊 Track your payments, discounts, and bonus hours.\n⏰ Link expires in 7 days.`,
+            updateSession: false,
+          };
+        }
+
+        return {
+          text: `⚠️ Error generating history link. Please try again later.`,
+          updateSession: false,
+        };
       }
 
       if (command === 'SHIFT') {
@@ -208,15 +310,73 @@ export async function routeMessage(phone, messageBody) {
     if (session.onboardingStep === 'plan_select') {
       const planMap = { basic: 'Shield Basic', plus: 'Shield Plus', pro: 'Shield Pro' };
       if (planMap[command.toLowerCase()]) {
-        SessionManager.updateSession(phone, {
-          plan: planMap[command.toLowerCase()],
-          isOnboarded: true,
-          onboardingStep: 'complete',
-        });
-        return {
-          text: MESSAGES.onboarding_complete[session.language] || MESSAGES.onboarding_complete.en,
-          updateSession: false,
-        };
+        const selectedPlan = planMap[command.toLowerCase()];
+        
+        // Register worker with backend API
+        try {
+          const registrationResponse = await fetch(`${BACKEND_URL}/api/v1/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              phone_number: phone,
+              platform: session.platform,
+              zone: session.zone || 'India',  // Default zone
+              shift: session.shift,
+              plan_tier: command.toLowerCase(),  // 'basic', 'plus', 'pro'
+              language: session.language || 'en',
+              source: 'whatsapp_bot',
+            }),
+          });
+
+          if (registrationResponse.ok) {
+            const registrationData = await registrationResponse.json();
+            const workerId = registrationData.worker?.id || registrationData.worker_id;
+            
+            if (workerId) {
+              // Store worker_id in session for future share link generation
+              SessionManager.updateSession(phone, {
+                plan: selectedPlan,
+                worker_id: workerId,  // ← KEY: Store the worker_id!
+                isOnboarded: true,
+                onboardingStep: 'complete',
+              });
+              
+              console.log(`[ONBOARDING_COMPLETE] Worker registered: ${workerId}, Phone: ${phone}`);
+              
+              return {
+                text: MESSAGES.onboarding_complete[session.language] || MESSAGES.onboarding_complete.en,
+                updateSession: false,
+              };
+            }
+          }
+          
+          // Fallback if registration fails
+          console.error('[REGISTRATION_ERROR] Backend registration failed');
+          SessionManager.updateSession(phone, {
+            plan: selectedPlan,
+            isOnboarded: true,
+            onboardingStep: 'complete',
+          });
+          
+          return {
+            text: `✅ ${MESSAGES.onboarding_complete[session.language] || MESSAGES.onboarding_complete.en}\n\n⚠️ Note: Share links may not work yet. Please try again in a moment.`,
+            updateSession: false,
+          };
+        } catch (error) {
+          console.error('[REGISTRATION_EXCEPTION]', error);
+          
+          // Still mark as onboarded, but without worker_id
+          SessionManager.updateSession(phone, {
+            plan: selectedPlan,
+            isOnboarded: true,
+            onboardingStep: 'complete',
+          });
+          
+          return {
+            text: MESSAGES.onboarding_complete[session.language] || MESSAGES.onboarding_complete.en,
+            updateSession: false,
+          };
+        }
       }
       return { text: 'Invalid choice. Please reply: basic, plus, or pro.', updateSession: false };
     }

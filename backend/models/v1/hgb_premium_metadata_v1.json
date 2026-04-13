@@ -1,7 +1,7 @@
 {
   "model_name": "GigKavach_Dynamic_Premium_HGB_v1",
   "objective": "poisson",
-  "created_at": "2026-04-11T19:18:43.651411",
+  "created_at": "2026-04-13T12:34:31.148029",
   "features": [
     "worker_gig_score",
     "pincode_30d_avg_dci",
@@ -11,13 +11,40 @@
     "shift_night",
     "shift_flexible"
   ],
+  "feature_count": 7,
+  "training_samples": 12000,
+  "test_samples": 3000,
   "metrics": {
     "test_r2": 0.8839747482938091,
     "test_mae": 0.021964669709878072,
-    "test_rmse": 0.028902753397833252
+    "test_rmse": 0.028902753397833245,
+    "train_r2": 0.8964294103276117,
+    "train_mae": 0.020876896361860565,
+    "train_rmse": 0.027379152609860142
+  },
+  "premium_validation": {
+    "base_price_basic": 30,
+    "min_premium_observed": 21.0,
+    "max_premium_observed": 29.99474930027591,
+    "mean_premium": 26.718820604822277,
+    "valid_range_min": 21.0,
+    "valid_range_max": 30.0
   },
   "business_bounds": {
     "min_discount": 0.0,
     "max_discount": 0.3
-  }
+  },
+  "validation_checks": {
+    "r2_gt_075": true,
+    "mae_lt_005": true,
+    "premium_min_valid": true,
+    "premium_max_valid": true,
+    "passed_checks": 4,
+    "total_checks": 4
+  },
+  "top_3_features": [
+    "worker_gig_score",
+    "predicted_7d_max_dci",
+    "pincode_30d_avg_dci"
+  ]
 }
