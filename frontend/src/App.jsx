@@ -21,6 +21,7 @@ import { SharedLinkRoute } from './components/SharedLinkRoute';
 import ProfileShare from './pages/link/ProfileShare';
 import StatusShare from './pages/link/StatusShare';
 import HistoryShare from './pages/link/HistoryShare';
+import SharedWorkerProfile from './pages/SharedWorkerProfile';
 
 // Protected Layout wrapper
 const ProtectedLayout = ({ children }) => {
@@ -141,6 +142,9 @@ export default function App() {
     <Routes>
       {/* Public Routes */}
       <Route path="/login" element={<Login />} />
+      
+      {/* Shared Worker Profile (via share token) */}
+      <Route path="/share/worker/:token" element={<SharedWorkerProfile />} />
       
       {/* Shareable Link Routes (Token-authenticated) */}
       <Route path="/link/:shareToken/profile" element={<ProfileShare />} />

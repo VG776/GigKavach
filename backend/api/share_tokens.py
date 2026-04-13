@@ -8,7 +8,7 @@ Used by WhatsApp bot to send shareable links to workers.
 from fastapi import APIRouter, HTTPException, status, Depends
 from pydantic import BaseModel
 from typing import Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import secrets
 import jwt
 import logging
@@ -50,7 +50,7 @@ class VerifyShareTokenResponse(BaseModel):
 
 # ─── Helper Functions ───────────────────────────────────────────────────
 
-def generate_share_token() -> str:
+def generate_secure_random_token() -> str:
     """
     Generate a secure share token.
     Uses URL-safe random bytes encoded as hex.
@@ -65,7 +65,7 @@ def create_share_token_jwt(worker_id: str, token_id: str, expires_at: datetime) 
     payload = {
         "sub": worker_id,  # Subject: worker ID
         "token_id": token_id,  # Token record ID
-        "iat": datetime.utcnow(),
+        "iat": datetime.now(timezone.utc),
         "exp": expires_at,
         "type": "share_token",
     }
@@ -132,16 +132,16 @@ async def generate_share_token(
             )
         
         # Generate token
-        token = generate_share_token()
+        token = generate_secure_random_token()
         
         # Calculate expiry
-        expires_at = datetime.utcnow() + timedelta(days=request.expires_in_days)
+        expires_at = datetime.now(timezone.utc) + timedelta(days=request.expires_in_days)
         
         # Store in database
         share_token_data = {
             "worker_id": request.worker_id,
             "token": token,
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
             "expires_at": expires_at.isoformat(),
             "is_used": False,
             "use_count": 0,
@@ -157,16 +157,17 @@ async def generate_share_token(
         
         logger.info(f"[SHARE_TOKEN] Generated: {token[:8]}... for worker {request.worker_id}")
         
-        # Build share URL (with fallback)
-        frontend_url = settings.FRONTEND_URL or "https://gigkavach.app"
-        share_url = f"{frontend_url}/link/{token}/profile"
+        # Build share URL (use production URL or default)
+        #frontend_url = getattr(settings, 'FRONTEND_URL', settings.FRONTEND_PRODUCTION_URL or "http://localhost:3000")
+        frontend_url ="http://localhost:3000"
+        share_url = f"{frontend_url}/share/worker/{token}"
         
         return GenerateShareTokenResponse(
             share_token=token,
             share_url=share_url,
             worker_id=request.worker_id,
             expires_at=expires_at.isoformat(),
-            created_at=datetime.utcnow().isoformat()
+            created_at=datetime.now(timezone.utc).isoformat()
         )
         
     except HTTPException:
@@ -215,7 +216,7 @@ async def verify_share_token(
         token_record = result.data[0]
         worker_id = token_record["worker_id"]
         expires_at = datetime.fromisoformat(token_record["expires_at"])
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         
         # Check expiry
         if now > expires_at:
@@ -278,7 +279,7 @@ async def get_worker_share_tokens(
             .execute()
         
         # Filter out expired tokens
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         active_tokens = [
             t for t in result.data 
             if datetime.fromisoformat(t["expires_at"]) > now
@@ -295,6 +296,94 @@ async def get_worker_share_tokens(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
+        )
+
+@router.get("/profile/{token}")
+async def get_shared_worker_profile(
+    token: str,
+    supabase = Depends(get_supabase)
+):
+    """
+    Get public worker profile using a share token.
+    Returns LIMITED public information about the worker.
+    Does NOT require authentication.
+    """
+    try:
+        logger.info(f"[SHARE_TOKEN] Fetching profile for token: {token[:8]}...")
+        
+        # Look up token in database
+        result = supabase.table("share_tokens")\
+            .select("*")\
+            .eq("token", token)\
+            .execute()
+        
+        if not result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Share token not found"
+            )
+        
+        token_record = result.data[0]
+        worker_id = token_record["worker_id"]
+        expires_at = datetime.fromisoformat(token_record["expires_at"])
+        now = datetime.now(timezone.utc)
+        
+        # Check expiry
+        if now > expires_at:
+            logger.warn(f"[SHARE_TOKEN] Token expired for worker {worker_id}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Share token has expired"
+            )
+        
+        # Check max uses
+        if token_record.get("max_uses") is not None:
+            if token_record["use_count"] >= token_record["max_uses"]:
+                logger.warn(f"[SHARE_TOKEN] Token max uses exceeded for worker {worker_id}")
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Share token use limit exceeded"
+                )
+        
+        # Fetch worker data (only PUBLIC fields)
+        worker_result = supabase.table("workers")\
+            .select("id, name, gig_platform, shift,plan, gig_score, portfolio_score")\
+            .eq("id", worker_id)\
+            .execute()
+        
+        if not worker_result.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Worker not found"
+            )
+        
+        worker = worker_result.data[0]
+        
+        # Increment use count
+        supabase.table("share_tokens")\
+            .update({"use_count": token_record["use_count"] + 1})\
+            .eq("token", token)\
+            .execute()
+        
+        logger.info(f"[SHARE_TOKEN] Profile fetched for worker {worker_id}")
+        
+        # Return PUBLIC profile only (no phone, email, UPI, etc)
+        return {
+            "name": worker.get("name", "Unknown"),
+            "platform": worker.get("gig_platform", "—"),
+            "shift": worker.get("shift", "—"),
+            "plan": worker.get("plan", "—"),
+            "gig_score": worker.get("gig_score", 0),
+            "portfolio_score": worker.get("portfolio_score", 0),
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[SHARE_TOKEN] Error fetching profile: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error fetching profile: {str(e)}"
         )
 
 @router.delete("/{token_id}")

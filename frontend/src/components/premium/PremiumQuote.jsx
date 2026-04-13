@@ -22,23 +22,24 @@ export function PremiumQuote({ workerId, selectedPlan = 'basic', onPlanChange = 
     }
 
     const fetchQuote = async () => {
-      // TODO: Premium API temporarily disabled due to 422 validation errors
-      // Need to investigate request format mismatch
-      setLoading(false);
+      setLoading(true);
       setError(null);
-      setQuote(null);
-      // setLoading(true);
-      // setError(null);
-      // try {
-      //   const quoteData = await premiumAPI.getQuote(workerId, selectedPlanLocal);
-      //   setQuote(quoteData);
-      // } catch (err) {
-      //   console.error('[PREMIUM_QUOTE] Error:', err);
-      //   setError(err.response?.data?.detail || 'Failed to fetch premium quote');
-      //   setQuote(null);
-      // } finally {
-      //   setLoading(false);
-      // }
+      try {
+        const quoteData = await premiumAPI.getQuote(workerId, selectedPlanLocal);
+        setQuote(quoteData);
+      } catch (err) {
+        console.error('[PREMIUM_QUOTE] Error:', err);
+        // Handle different error response formats
+        const errorMessage = 
+          err?.detail || 
+          err?.message || 
+          (typeof err === 'string' ? err : null) ||
+          'Failed to fetch premium quote';
+        setError(errorMessage);
+        setQuote(null);
+      } finally {
+        setLoading(false);
+      }
     };
 
     const timer = setTimeout(fetchQuote, 300);
