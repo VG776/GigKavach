@@ -15,7 +15,7 @@ def get_worker_detail(worker_id: str):
         worker_response = (
             sb.table("workers")
             .select(
-                "id, name, phone, pin_codes, shift, shift_start, shift_end, language, plan, coverage_pct, last_seen_at, upi_id, is_active"
+                "id, name, phone, pin_codes, shift, shift_start, shift_end, language, plan, coverage_pct, last_seen_at, upi_id, is_active, gig_score, gig_platform, portfolio_score"
             )
             .eq("id", worker_id)
             .execute()

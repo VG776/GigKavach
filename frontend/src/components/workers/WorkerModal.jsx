@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { X, Phone, MapPin, Clock, Zap, DollarSign, Activity } from 'lucide-react';
+import { X, Phone, MapPin, Clock, Zap, DollarSign, Activity, Star, Briefcase, Building2 } from 'lucide-react';
 import { formatPhoneNumber, formatCurrency, getInitials } from '../../utils/formatters';
 import { workerAPI } from '../../api/workers';
 import { PremiumQuote } from '../premium/PremiumQuote';
@@ -45,6 +45,9 @@ export function WorkerModal({ workerId, isOpen, onClose }) {
           premium: data.policy?.weekly_premium || 0,
           coverage: data.policy?.coverage_pct || data.worker.coverage_pct || 0,
           status: policyStatus,
+          gig_score: data.worker.gig_score || 0,
+          gig_platform: data.worker.gig_platform || 'N/A',
+          portfolio_score: data.worker.portfolio_score || 0,
           payoutHistory: data.payouts || [],
           activityLog: data.activities || [],
         };
@@ -129,6 +132,40 @@ export function WorkerModal({ workerId, isOpen, onClose }) {
           </div>
         ) : (
           <div className="p-6 space-y-6 max-h-[calc(100vh-300px)] overflow-y-auto">
+            <section>
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                <Star className="w-4 h-4 text-gigkavach-orange" />
+                Performance & Metrics
+              </h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/20 p-4 rounded-lg border border-blue-200 dark:border-blue-700">
+                  <p className="text-xs text-gray-600 dark:text-gray-300 mb-2 font-semibold">Gig Score</p>
+                  <div className="flex items-baseline gap-1">
+                    <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">{workerData?.gig_score || 0}</p>
+                    <span className="text-xs text-blue-600 dark:text-blue-300">/100</span>
+                  </div>
+                </div>
+                <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/20 p-4 rounded-lg border border-purple-200 dark:border-purple-700">
+                  <p className="text-xs text-gray-600 dark:text-gray-300 mb-2 font-semibold">Portfolio Score</p>
+                  <div className="flex items-baseline gap-1">
+                    <p className="text-2xl font-bold text-purple-700 dark:text-purple-400">{workerData?.portfolio_score || 0}</p>
+                    <span className="text-xs text-purple-600 dark:text-purple-300">/100</span>
+                  </div>
+                </div>
+                <div className="bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-900/30 dark:to-amber-800/20 p-4 rounded-lg border border-amber-200 dark:border-amber-700">
+                  <p className="text-xs text-gray-600 dark:text-gray-300 mb-2 font-semibold flex items-center gap-1">
+                    <Building2 className="w-3 h-3" />
+                    Platform
+                  </p>
+                  <p className="text-sm font-bold text-amber-700 dark:text-amber-400 capitalize">{workerData?.gig_platform || 'N/A'}</p>
+                </div>
+                <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/30 dark:to-emerald-800/20 p-4 rounded-lg border border-emerald-200 dark:border-emerald-700">
+                  <p className="text-xs text-gray-600 dark:text-gray-300 mb-2 font-semibold">Shift Type</p>
+                  <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400 capitalize">{workerData?.shift || 'N/A'}</p>
+                </div>
+              </div>
+            </section>
+
             <section>
               <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                 <Phone className="w-4 h-4 text-gigkavach-orange" />

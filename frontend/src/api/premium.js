@@ -44,7 +44,7 @@ export const premiumAPI = {
         worker_id: workerId,
         plan_tier: planTier.toLowerCase()
       });
-      return response.data;
+      return response;
     } catch (error) {
       console.error('[PREMIUM_API] Error fetching quote:', error.response?.data || error.message);
       throw error;
@@ -65,7 +65,7 @@ export const premiumAPI = {
           plan: planTier.toLowerCase()
         }
       });
-      return response.data;
+      return response;
     } catch (error) {
       console.error('[PREMIUM_API] Error fetching quote (GET):', error.response?.data || error.message);
       throw error;

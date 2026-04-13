@@ -85,6 +85,10 @@ def get_workers(
                 "coverage": w.get("coverage_pct", 0),
                 "status": latest_policies.get(w.get("id"), {}).get("status", "inactive"),
                 "last_active": w.get("last_seen_at"),
+                "gig_score": w.get("gig_score", 0),
+                "gig_platform": w.get("gig_platform", ""),
+                "shift": w.get("shift", ""),
+                "portfolio_score": w.get("portfolio_score", 0),
             }
             for w in data
         ]
