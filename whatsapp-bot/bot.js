@@ -18,8 +18,6 @@ import chalk from 'chalk';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { execSync } from 'child_process';
-import { routeMessage } from './services/message-handler.js';
-import SessionManager from './services/session-manager.js';
 import { messageQueue } from './services/message-queue.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -457,14 +455,10 @@ app.get('/health', (req, res) => {
  * Bot statistics and session info
  */
 app.get('/stats', (req, res) => {
-  const sessions = SessionManager.getAllSessions();
-  const activeSessions = Object.values(sessions).filter((s) => s.status === 'active').length;
   const queueStats = messageQueue.getStats();
-
+  
   return res.json({
     status: 'ok',
-    total_sessions: Object.keys(sessions).length,
-    active_sessions: activeSessions,
     queue: queueStats,
     uptime_seconds: process.uptime(),
     timestamp: new Date().toISOString(),
