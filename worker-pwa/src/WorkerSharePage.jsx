@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { getWorkerProfileByToken, updateWorkerProfileByToken } from './api';
+import { getWorkerProfileByToken, sessionLoginByToken, updateWorkerProfileByToken } from './api';
 
 const SHIFTS = ['Flexible', 'Morning', 'Evening', 'Night'];
 const PLATFORMS = ['Zomato', 'Swiggy'];
@@ -18,6 +18,12 @@ export function WorkerSharePage() {
     const [error, setError] = useState('');
     const [notice, setNotice] = useState('');
     const [installEvent, setInstallEvent] = useState(null);
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [authForm, setAuthForm] = useState({
+        phone: '',
+        password: '',
+        digilocker_id: '',
+    });
 
     const [form, setForm] = useState({
         gig_platform: 'Zomato',
@@ -37,24 +43,17 @@ export function WorkerSharePage() {
     }, []);
 
     useEffect(() => {
-        async function loadProfile() {
+        async function loadPreviewProfile() {
             try {
-                setError('');
-                setNotice('');
                 const data = await getWorkerProfileByToken(token);
                 setProfile(data);
-                setForm({
-                    gig_platform: data.platform || 'Zomato',
-                    shift: data.shift || 'Flexible',
-                    gig_score: Number(data.gig_score || 50),
-                    portfolio_score: Number(data.portfolio_score || 50),
-                });
+                setAuthForm((prev) => ({ ...prev, phone: data.phone || '' }));
             } catch (err) {
                 setError(err.message || 'Unable to load profile');
             }
         }
 
-        if (token) loadProfile();
+        if (token) loadPreviewProfile();
     }, [token]);
 
     const recommendation = useMemo(
@@ -85,6 +84,31 @@ export function WorkerSharePage() {
         }
     }
 
+    async function handleSessionLogin(event) {
+        event.preventDefault();
+        setSaving(true);
+        setError('');
+        setNotice('');
+
+        try {
+            const result = await sessionLoginByToken(token, authForm);
+            const p = result.profile;
+            setProfile(p);
+            setForm({
+                gig_platform: p.platform || 'Zomato',
+                shift: p.shift || 'Flexible',
+                gig_score: Number(p.gig_score || 50),
+                portfolio_score: Number(p.portfolio_score || 50),
+            });
+            setIsAuthenticated(true);
+            setNotice(result.demo_notice || 'Session login successful.');
+        } catch (err) {
+            setError(err.message || 'Unable to login');
+        } finally {
+            setSaving(false);
+        }
+    }
+
     async function handleInstall() {
         if (!installEvent) return;
         await installEvent.prompt();
@@ -105,7 +129,57 @@ export function WorkerSharePage() {
 
                 {error && <p className="error">{error}</p>}
 
-                {profile && (
+                {!isAuthenticated && (
+                    <form onSubmit={handleSessionLogin} className="form auth-form">
+                        <div className="recommendation">
+                            <p>Session login required</p>
+                            <strong>Use phone + password + DigiLocker demo verification</strong>
+                        </div>
+
+                        <label>
+                            Phone number
+                            <input
+                                type="tel"
+                                value={authForm.phone}
+                                onChange={(e) => setAuthForm((prev) => ({ ...prev, phone: e.target.value }))}
+                                placeholder="9198xxxxxxx"
+                                required
+                            />
+                        </label>
+
+                        <label>
+                            Password
+                            <input
+                                type="password"
+                                value={authForm.password}
+                                onChange={(e) => setAuthForm((prev) => ({ ...prev, password: e.target.value }))}
+                                placeholder="Enter password"
+                                required
+                            />
+                        </label>
+
+                        <label>
+                            DigiLocker ID (demo)
+                            <input
+                                type="text"
+                                value={authForm.digilocker_id}
+                                onChange={(e) => setAuthForm((prev) => ({ ...prev, digilocker_id: e.target.value }))}
+                                placeholder="DLK-123456"
+                                required
+                            />
+                        </label>
+
+                        <p className="demo-note">
+                            Demo note: DigiLocker verification is mocked. No DigiLocker data is stored.
+                        </p>
+
+                        <button type="submit" disabled={saving}>
+                            {saving ? 'Logging in...' : 'Login to Start WhatsApp Session'}
+                        </button>
+                    </form>
+                )}
+
+                {profile && isAuthenticated && (
                     <>
                         <div className="grid">
                             <div>
@@ -115,6 +189,14 @@ export function WorkerSharePage() {
                             <div>
                                 <label>Current Plan</label>
                                 <p>{profile.plan || 'Shield Basic'}</p>
+                            </div>
+                            <div>
+                                <label>Phone</label>
+                                <p>{profile.phone || '-'}</p>
+                            </div>
+                            <div>
+                                <label>UPI</label>
+                                <p>{profile.upi_id || '-'}</p>
                             </div>
                         </div>
 

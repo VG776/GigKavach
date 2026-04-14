@@ -209,6 +209,12 @@ client.on('message', async (msg) => {
 
       if (!response.ok) {
         log.error(`Backend webhook failed: ${response.status}`);
+      } else {
+        const data = await response.json().catch(() => ({}));
+        if (data?.reply) {
+          await msg.reply(data.reply);
+          log.debug(`Replied directly to ${phone}`);
+        }
       }
     } catch (backendError) {
       log.error(`Failed to reach backend: ${backendError.message}`);

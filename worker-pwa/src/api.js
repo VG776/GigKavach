@@ -17,6 +17,13 @@ export async function getWorkerProfileByToken(token) {
   return request(`/api/v1/share-tokens/profile/${token}`);
 }
 
+export async function sessionLoginByToken(token, payload) {
+  return request(`/api/v1/share-tokens/session-login/${token}`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function updateWorkerProfileByToken(token, updates) {
   return request(`/api/v1/share-tokens/profile/${token}`, {
     method: 'PATCH',

@@ -115,6 +115,43 @@ def normalize_shift_for_storage(shift_value: str) -> str:
     return val
 
 
+async def get_worker_by_phone(phone: str) -> Optional[dict]:
+    """Fetch worker record by normalized phone across known phone columns."""
+    sb = get_supabase()
+    result = sb.table("workers").select("*").eq("phone", phone).execute()
+    if result.data:
+        return result.data[0]
+
+    result_alt = sb.table("workers").select("*").eq("phone_number", phone).execute()
+    if result_alt.data:
+        return result_alt.data[0]
+    return None
+
+
+async def is_whatsapp_session_active(phone: str) -> bool:
+    """Checks if a worker has an active PWA-authenticated WhatsApp session."""
+    try:
+        rc = await get_redis()
+        value = await rc.get(f"wa_session:{phone}")
+        return value == "active"
+    except Exception as e:
+        logger.warning(f"Session check failed for {phone}: {e}")
+        return False
+
+
+def format_session_login_prompt(share_url: str) -> str:
+    return (
+        "🔐 Please start this WhatsApp session by logging in via your worker link:\n"
+        f"{share_url}\n\n"
+        "Demo note: DigiLocker verification is mocked and no DigiLocker data is stored."
+    )
+
+
+def get_or_create_worker_share_url(worker_id: str, reason: str) -> str:
+    token_data = generate_share_token(worker_id, expires_in_days=7, max_uses=200, reason=reason)
+    return token_data.get("share_url", "")
+
+
 # ─── Redis Helpers ────────────────────────────────────────────────────────────
 
 async def get_onboarding_state(phone: str) -> Optional[dict]:
@@ -161,12 +198,10 @@ async def handle_join(phone: str, message: str) -> str:
     Worker sends "JOIN" → Ask for language preference
     """
     # Check if already onboarded
-    sb = get_supabase()
-    existing = sb.table("workers").select("id").eq("phone", phone).execute()
-    
-    if existing.data:
-        return MESSAGES.get("already_onboarded", {}).get("en",
-            f"✅ You're already registered! Type STATUS to check coverage.")
+    existing_worker = await get_worker_by_phone(phone)
+    if existing_worker:
+        share_url = get_or_create_worker_share_url(existing_worker["id"], "WhatsApp JOIN session login")
+        return format_session_login_prompt(share_url)
     
     # Initialize onboarding state
     state = {
@@ -450,13 +485,11 @@ async def handle_status(phone: str, message: str) -> str:
     """
     try:
         sb = get_supabase()
-        
-        # Get worker
-        worker_response = sb.table("workers").select("*").eq("phone", phone).execute()
-        if not worker_response.data:
+
+        worker = await get_worker_by_phone(phone)
+        if not worker:
             return "❌ Not registered yet. Reply with JOIN to start."
-        
-        worker = worker_response.data[0]
+
         lang = worker.get("language", "en")
         
         # Get active policy
@@ -526,12 +559,11 @@ async def handle_renew(phone: str, message: str) -> str:
     """
     try:
         sb = get_supabase()
-        
-        worker_response = sb.table("workers").select("*").eq("phone", phone).execute()
-        if not worker_response.data:
+
+        worker = await get_worker_by_phone(phone)
+        if not worker:
             return "❌ Not registered. Reply with JOIN."
-        
-        worker = worker_response.data[0]
+
         lang = worker.get("language", "en")
         plan = worker.get("plan")
         
@@ -573,12 +605,11 @@ async def handle_shift_update(phone: str, message: str) -> str:
     """
     try:
         sb = get_supabase()
-        
-        worker_response = sb.table("workers").select("*").eq("phone", phone).execute()
-        if not worker_response.data:
+
+        worker = await get_worker_by_phone(phone)
+        if not worker:
             return "❌ Not registered. Reply with JOIN."
-        
-        worker = worker_response.data[0]
+
         lang = worker.get("language", "en")
         
         # Parse shift choice from message
@@ -614,12 +645,10 @@ async def handle_language_change(phone: str, message: str) -> str:
     """
     try:
         sb = get_supabase()
-        
-        worker_response = sb.table("workers").select("*").eq("phone", phone).execute()
-        if not worker_response.data:
+
+        worker = await get_worker_by_phone(phone)
+        if not worker:
             return "❌ Not registered. Reply with JOIN."
-        
-        worker = worker_response.data[0]
         
         # Parse language choice
         parts = message.strip().split()
@@ -653,10 +682,8 @@ async def handle_help(phone: str, message: str) -> str:
     HELP command — Show all available commands
     """
     try:
-        sb = get_supabase()
-        
-        worker_response = sb.table("workers").select("language").eq("phone", phone).execute()
-        lang = worker_response.data[0].get("language", "en") if worker_response.data else "en"
+        worker = await get_worker_by_phone(phone)
+        lang = worker.get("language", "en") if worker else "en"
         
         return MESSAGES["help"][lang]
         
@@ -672,12 +699,11 @@ async def handle_appeal(phone: str, message: str) -> str:
     """
     try:
         sb = get_supabase()
-        
-        worker_response = sb.table("workers").select("*").eq("phone", phone).execute()
-        if not worker_response.data:
+
+        worker = await get_worker_by_phone(phone)
+        if not worker:
             return "❌ Not registered. Reply with JOIN."
-        
-        worker = worker_response.data[0]
+
         lang = worker.get("language", "en")
         
         # Create appeal record
@@ -713,13 +739,12 @@ async def handle_profile(phone: str, message: str) -> str:
     PROFILE command — Generate a secure PWA link for the worker's profile
     """
     try:
-        sb = get_supabase()
-        worker = sb.table("workers").select("id, language").eq("phone", phone).single().execute()
-        if not worker.data:
+        worker = await get_worker_by_phone(phone)
+        if not worker:
             return "❌ Not registered. Reply with JOIN."
-        
-        wid = worker.data["id"]
-        lang = worker.data.get("language", "en")
+
+        wid = worker["id"]
+        lang = worker.get("language", "en")
         
         # Generate token (valid for 7 days)
         token_data = generate_share_token(wid, expires_in_days=7, max_uses=50, reason="WhatsApp PROFILE command")
@@ -742,13 +767,12 @@ async def handle_history(phone: str, message: str) -> str:
     HISTORY command — Generate a secure PWA link for the worker's transaction history
     """
     try:
-        sb = get_supabase()
-        worker = sb.table("workers").select("id, language").eq("phone", phone).single().execute()
-        if not worker.data:
+        worker = await get_worker_by_phone(phone)
+        if not worker:
             return "❌ Not registered. Reply with JOIN."
-        
-        wid = worker.data["id"]
-        lang = worker.data.get("language", "en")
+
+        wid = worker["id"]
+        lang = worker.get("language", "en")
         
         token_data = generate_share_token(wid, expires_in_days=7, max_uses=50, reason="WhatsApp HISTORY command")
         
@@ -772,6 +796,18 @@ async def route_message(phone: str, body: str) -> str:
     Main router — dispatch to appropriate handler based on message content and current step
     """
     keyword = body.strip().upper().split()[0] if body.strip() else ""
+
+    # If worker is already registered, require a PWA login link at the start of each session.
+    worker = await get_worker_by_phone(phone)
+    if worker and keyword in {"LOGIN", "START", "SESSION"}:
+        share_url = get_or_create_worker_share_url(worker["id"], "WhatsApp explicit session login")
+        return format_session_login_prompt(share_url)
+
+    if worker and keyword not in {"HELP", "PROFILE", "HISTORY", "LOGIN", "START", "SESSION", "JOIN"}:
+        session_active = await is_whatsapp_session_active(phone)
+        if not session_active:
+            share_url = get_or_create_worker_share_url(worker["id"], "WhatsApp auto session login")
+            return format_session_login_prompt(share_url)
     
     # Commands that work anytime for registered users
     if keyword == "STATUS":

@@ -77,6 +77,10 @@ label p {
     gap: 12px;
 }
 
+.auth-form {
+    margin-bottom: 12px;
+}
+
 input,
 select,
 button {
@@ -125,6 +129,12 @@ button[disabled] {
     margin: 12px 0 0;
     color: #166534;
     font-weight: 600;
+}
+
+.demo-note {
+    margin: 0;
+    color: #475569;
+    font-size: 0.85rem;
 }
 
 @media (max-width: 420px) {
