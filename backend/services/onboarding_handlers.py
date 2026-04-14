@@ -421,7 +421,6 @@ async def handle_plan_selection(phone: str, message: str, state: dict) -> str:
         worker_data = {
             "phone": phone,
             "phone_number": phone,
-            "platform": state.get("platform"),
             "gig_platform": str(state.get("platform", "zomato")).capitalize(),
             "shift": state.get("shift"),
             "upi_id": state.get("upi_id"),
@@ -476,7 +475,10 @@ async def handle_plan_selection(phone: str, message: str, state: dict) -> str:
         
     except Exception as e:
         logger.error(f"Error completing onboarding for {phone}: {e}")
-        return f"⚠️ Error during registration: {str(e)}"
+        return (
+            "⚠️ We hit a temporary setup issue while creating your profile. "
+            "Please try again in a moment, or type HELP."
+        )
 
 
 async def handle_status(phone: str, message: str) -> str:

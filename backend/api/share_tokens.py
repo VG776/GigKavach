@@ -369,7 +369,7 @@ async def get_shared_worker_profile(
         
         # Fetch worker data (only PUBLIC fields)
         worker_result = supabase.table("workers")\
-            .select("id, name, phone, phone_number, upi_id, pin_codes, language, gig_platform, platform, shift, plan, gig_score, portfolio_score")\
+            .select("id, name, phone, phone_number, upi_id, pin_codes, language, gig_platform, shift, plan, gig_score, portfolio_score")\
             .eq("id", worker_id)\
             .execute()
         
@@ -391,7 +391,7 @@ async def get_shared_worker_profile(
         
         shift_value = worker.get("shift", "flexible")
         shift_display = "Evening" if str(shift_value).lower() == "day" else str(shift_value).capitalize()
-        platform_value = worker.get("gig_platform") or worker.get("platform") or "zomato"
+        platform_value = worker.get("gig_platform") or "zomato"
 
         # Return PUBLIC profile only (no phone, email, UPI, etc)
         return {
@@ -454,7 +454,6 @@ async def update_shared_worker_profile(
             if platform_norm not in ALLOWED_PLATFORMS:
                 raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Platform must be Zomato or Swiggy")
             updates["gig_platform"] = platform_norm.capitalize()
-            updates["platform"] = platform_norm
 
         if request.shift is not None:
             shift_norm = request.shift.strip().lower()
@@ -500,7 +499,7 @@ async def update_shared_worker_profile(
 
         refreshed = (
             supabase.table("workers")
-            .select("id, name, phone, phone_number, upi_id, pin_codes, language, gig_platform, platform, shift, plan, gig_score, portfolio_score")
+            .select("id, name, phone, phone_number, upi_id, pin_codes, language, gig_platform, shift, plan, gig_score, portfolio_score")
             .eq("id", worker_id)
             .execute()
         )
@@ -508,7 +507,7 @@ async def update_shared_worker_profile(
         worker = (refreshed.data or [{}])[0]
         shift_value = worker.get("shift", "flexible")
         shift_display = "Evening" if str(shift_value).lower() == "day" else str(shift_value).capitalize()
-        platform_value = worker.get("gig_platform") or worker.get("platform") or "zomato"
+        platform_value = worker.get("gig_platform") or "zomato"
 
         return {
             "message": "Profile updated",
@@ -569,7 +568,7 @@ async def session_login_with_share_token(
         worker_id = token_record["worker_id"]
         worker_result = (
             supabase.table("workers")
-            .select("id, name, phone, phone_number, upi_id, pin_codes, language, gig_platform, platform, shift, plan, gig_score, portfolio_score")
+            .select("id, name, phone, phone_number, upi_id, pin_codes, language, gig_platform, shift, plan, gig_score, portfolio_score")
             .eq("id", worker_id)
             .execute()
         )
@@ -587,7 +586,7 @@ async def session_login_with_share_token(
 
         shift_value = worker.get("shift", "flexible")
         shift_display = "Evening" if str(shift_value).lower() == "day" else str(shift_value).capitalize()
-        platform_value = worker.get("gig_platform") or worker.get("platform") or "zomato"
+        platform_value = worker.get("gig_platform") or "zomato"
 
         return {
             "message": "Login successful",
