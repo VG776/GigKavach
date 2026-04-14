@@ -211,3 +211,247 @@ async def batch_fraud_check(claims: list[FraudCheckRequest]):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Batch assessment failed: {str(e)}"
         )
+
+
+# ─── Fraud Flags Monitoring (Dashboard) ────────────────────────────────────────
+
+class FraudFlagResponse(BaseModel):
+    """A fraud flag record from the monitoring dashboard."""
+    id: str
+    worker_id: str
+    worker_name: Optional[str] = None
+    payout_id: Optional[str] = None
+    signals: Dict[str, bool] = Field(default_factory=dict)
+    signal_count: int = 0
+    fraud_tier: str = "tier0"
+    gps_lat: Optional[float] = None
+    gps_lng: Optional[float] = None
+    gps_entropy_score: Optional[float] = None
+    is_appealed: bool = False
+    appeal_outcome: Optional[str] = None
+    resolved_at: Optional[str] = None
+    notes: Optional[str] = None
+    created_at: str
+    risk_level: str  # 'low', 'medium', 'high'
+    path: str  # 'A', 'B', 'C'
+
+
+@router.get(
+    "/fraud-flags",
+    response_model=Dict[str, Any],
+    summary="Get all active fraud flags (dashboard)",
+    description="""
+    Fetches recent fraud flag records from the fraud_flags table with worker details.
+    Used by the Fraud Operations Center dashboard.
+    
+    Returns list of flagged workers with their signal breakdown.
+    """
+)
+async def get_fraud_flags(
+    limit: int = 100,
+    resolved: bool = False,
+    tier: Optional[str] = None
+):
+    """
+    Fetch fraud flag records for the dashboard.
+    
+    Query params:
+      - limit: Max records to return (default: 100)
+      - resolved: Include resolved cases (default: false)
+      - tier: Filter by tier ('tier0', 'tier1', 'tier2') or None for all
+    """
+    try:
+        from utils.supabase_client import get_supabase
+        from utils.pincode_mapper import PINCODE_MAP
+        
+        sb = get_supabase()
+        logger.info(f"[FRAUD_FLAGS] Fetching fraud flags: limit={limit}, resolved={resolved}, tier={tier}")
+        
+        # Build query
+        query = sb.table("fraud_flags").select(
+            "id, worker_id, payout_id, sig1_gps, sig2_ip_zone_mismatch, sig3_velocity, "
+            "sig4_gps_entropy_low, sig5_claim_timing_cluster, sig6_zone_loyalty_mismatch, "
+            "signal_count, fraud_tier, gps_lat, gps_lng, gps_entropy_score, "
+            "is_appealed, appeal_outcome, resolved_at, notes, created_at"
+        )
+        
+        # Filter by resolution status
+        if not resolved:
+            query = query.is_("resolved_at", None)
+        
+        # Filter by tier if specified
+        if tier:
+            query = query.eq("fraud_tier", tier)
+        
+        # Order by creation date (newest first)
+        query = query.order("created_at", desc=True).limit(limit)
+        
+        result = query.execute()
+        rows = result.data or []
+        logger.info(f"[FRAUD_FLAGS] Found {len(rows)} fraud flag records")
+        
+        # Fetch worker names - batch query for efficiency
+        worker_ids = list(set(row["worker_id"] for row in rows))
+        workers_by_id = {}
+        
+        if worker_ids:
+            logger.info(f"[FRAUD_FLAGS] Fetching details for {len(worker_ids)} workers")
+            try:
+                workers_result = sb.table("workers").select("id, name, gig_score, pin_codes").in_("id", worker_ids).execute()
+                for worker in workers_result.data or []:
+                    workers_by_id[worker["id"]] = worker
+                logger.info(f"[FRAUD_FLAGS] Fetched {len(workers_by_id)} worker records")
+            except Exception as worker_err:
+                logger.warning(f"[FRAUD_FLAGS] Failed to fetch worker details: {str(worker_err)}")
+        
+        # Transform fraud flags
+        flags_list = []
+        for row in rows:
+            try:
+                # Extract signals
+                signals = {
+                    "gps": row.get("sig1_gps", False),
+                    "ip_mismatch": row.get("sig2_ip_zone_mismatch", False),
+                    "velocity": row.get("sig3_velocity", False),
+                    "gps_entropy": row.get("sig4_gps_entropy_low", False),
+                    "timing_cluster": row.get("sig5_claim_timing_cluster", False),
+                    "zone_loyalty": row.get("sig6_zone_loyalty_mismatch", False),
+                }
+                
+                # Calculate risk level based on signal count and tier
+                signal_count = row.get("signal_count", 0)
+                fraud_tier = row.get("fraud_tier", "tier0")
+                
+                if fraud_tier == "tier2" or signal_count >= 5:
+                    risk_level = "high"
+                    path = "C"
+                elif fraud_tier == "tier1" or signal_count >= 2:
+                    risk_level = "medium"
+                    path = "B"
+                else:
+                    risk_level = "low"
+                    path = "A"
+                
+                # Get worker details
+                worker = workers_by_id.get(row["worker_id"], {})
+                worker_name = worker.get("name", "Unknown Worker")
+                gig_score = worker.get("gig_score", 85)  # Default to 85 if missing
+                
+                # pin_codes is an array, take the first one
+                pin_codes_array = worker.get("pin_codes", [])
+                working_pincode = None
+                if pin_codes_array and len(pin_codes_array) > 0:
+                    working_pincode = pin_codes_array[0]
+                
+                # Get zone from pincode
+                zone_name = "Unknown"
+                if working_pincode:
+                    try:
+                        pincode_str = str(working_pincode).strip()
+                        logger.debug(f"[FRAUD_FLAGS] Looking up pincode: {pincode_str}")
+                        pincode_info = PINCODE_MAP.get(pincode_str, {})
+                        zone_name = pincode_info.get("neighborhood", "Unknown")
+                        logger.debug(f"[FRAUD_FLAGS] Mapped pincode {pincode_str} to zone: {zone_name}")
+                    except Exception as pincode_err:
+                        logger.warning(f"[FRAUD_FLAGS] Failed to map pincode {working_pincode}: {str(pincode_err)}")
+                
+                flags_list.append({
+                    "id": row["id"],
+                    "worker_id": row["worker_id"],
+                    "worker_name": worker_name,
+                    "gig_score": gig_score,
+                    "zone": zone_name,
+                    "payout_id": row.get("payout_id"),
+                    "signals": signals,
+                    "signal_count": signal_count,
+                    "fraud_tier": fraud_tier,
+                    "gps_lat": row.get("gps_lat"),
+                    "gps_lng": row.get("gps_lng"),
+                    "gps_entropy_score": row.get("gps_entropy_score"),
+                    "is_appealed": row.get("is_appealed", False),
+                    "appeal_outcome": row.get("appeal_outcome"),
+                    "resolved_at": row.get("resolved_at"),
+                    "notes": row.get("notes"),
+                    "created_at": row.get("created_at"),
+                    "risk_level": risk_level,
+                    "path": path,
+                })
+            except Exception as transform_err:
+                logger.error(f"[FRAUD_FLAGS] Failed to transform flag record: {str(transform_err)}")
+        
+        logger.info(f"[FRAUD_FLAGS] Returning {len(flags_list)} transformed fraud flags")
+        return {
+            "count": len(flags_list),
+            "flags": flags_list,
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to fetch fraud flags: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch fraud flags: {str(e)}"
+        )
+
+
+@router.get(
+    "/fraud-summary",
+    summary="Get fraud summary stats",
+    description="High-level fraud statistics for the dashboard"
+)
+async def get_fraud_summary():
+    """Get summary statistics for fraud monitoring dashboard."""
+    try:
+        from utils.supabase_client import get_supabase
+        
+        sb = get_supabase()
+        logger.info("[FRAUD_SUMMARY] Fetching fraud summary statistics")
+        
+        # Count high risk active (tier2)
+        high_risk = (
+            sb.table("fraud_flags")
+            .select("id", count="exact")
+            .eq("fraud_tier", "tier2")
+            .is_("resolved_at", None)
+            .execute()
+        )
+        high_risk_count = high_risk.count if hasattr(high_risk, 'count') else 0
+        logger.info(f"[FRAUD_SUMMARY] High risk (tier2) active: {high_risk_count}")
+        
+        # Count tier1 (medium)
+        medium_risk = (
+            sb.table("fraud_flags")
+            .select("id", count="exact")
+            .eq("fraud_tier", "tier1")
+            .is_("resolved_at", None)
+            .execute()
+        )
+        medium_risk_count = medium_risk.count if hasattr(medium_risk, 'count') else 0
+        logger.info(f"[FRAUD_SUMMARY] Medium risk (tier1) active: {medium_risk_count}")
+        
+        # Count resolved this week
+        from datetime import datetime, timedelta, timezone
+        week_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+        resolved_week = (
+            sb.table("fraud_flags")
+            .select("id", count="exact")
+            .gte("resolved_at", week_ago)
+            .execute()
+        )
+        resolved_count = resolved_week.count if hasattr(resolved_week, 'count') else 0
+        logger.info(f"[FRAUD_SUMMARY] Resolved this week: {resolved_count}")
+        
+        result = {
+            "high_risk_active": high_risk_count or 0,
+            "medium_risk_active": medium_risk_count or 0,
+            "resolved_this_week": resolved_count or 0,
+            "total_flagged": (high_risk_count or 0) + (medium_risk_count or 0),
+        }
+        logger.info(f"[FRAUD_SUMMARY] Returning summary: {result}")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Failed to fetch fraud summary: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch fraud summary: {str(e)}"
+        )

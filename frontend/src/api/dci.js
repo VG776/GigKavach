@@ -29,4 +29,30 @@ export const dciAPI = {
   getTodayTotal: () => {
     return apiClient.get('/api/v1/dci/total/today');
   },
+
+  /**
+   * Get all city weight profiles for all supported cities.
+   * GET /api/v1/dci/city-weights
+   */
+  getAllCityWeights: () => {
+    return apiClient.get('/api/v1/dci/city-weights');
+  },
+
+  /**
+   * Get DCI component weights for a specific city.
+   * GET /api/v1/dci/city-weights/{city}
+   */
+  getCityWeights: (city) => {
+    const encodedCity = encodeURIComponent(city);
+    return apiClient.get(`/api/v1/dci/city-weights/${encodedCity}`);
+  },
+
+  /**
+   * Get DCI weights for a specific pincode.
+   * Automatically resolves city from pincode.
+   * GET /api/v1/dci/weights/{pincode}
+   */
+  getPincodeWeights: (pincode) => {
+    return apiClient.get(`/api/v1/dci/weights/${pincode}`);
+  },
 };

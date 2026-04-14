@@ -304,7 +304,29 @@ export const Workers = () => {
 
   // ✅ LOADING (AFTER ALL HOOKS)
   if (loading) {
-    return <div className="p-6">Loading workers...</div>;
+    return (
+      <div className="min-h-[70vh] flex items-center justify-center rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm">
+        <div className="text-center px-6">
+          <div className="mx-auto mb-6 h-16 w-16 rounded-full border-4 border-gray-300/60 dark:border-gray-700 border-t-indigo-500 animate-spin" />
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Loading Workers</h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">Fetching worker profiles, plans & premium data from backend...</p>
+          <div className="space-y-2 text-xs text-gray-500 dark:text-gray-500">
+            <div className="flex items-center justify-center gap-2">
+              <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse" />
+              <span>Retrieving worker profiles</span>
+            </div>
+            <div className="flex items-center justify-center gap-2">
+              <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" style={{animationDelay: '0.2s'}} />
+              <span>Loading coverage plans</span>
+            </div>
+            <div className="flex items-center justify-center gap-2">
+              <div className="w-2 h-2 bg-pink-500 rounded-full animate-pulse" style={{animationDelay: '0.4s'}} />
+              <span>Computing premium insights</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
