@@ -4,6 +4,7 @@ import { payoutAPI } from '../api/payouts';
 import { dciAPI } from '../api/dci';
 import { workerAPI } from '../api/workers';
 import { premiumAPI } from '../api/premium';
+import { fraudAPI } from '../api/fraud';
 import { DCIChart } from '../components/dci/DCIChart';
 import { logger } from '../utils/logger';
 
@@ -183,10 +184,12 @@ const sparkline = {
 const [todayPayout, setTodayPayout] = useState(null);
 const [todayDCI, setTodayDCI] = useState(null);
 const [activeWorkers, setActiveWorkers] = useState(null);
+const [fraudAlertsCount, setFraudAlertsCount] = useState(0);
 const [metricsLoading, setMetricsLoading] = useState({
   payout: true,
   dci: true,
   workers: true,
+  fraud: true,
 });
 
   // Premium Insights State
@@ -222,6 +225,22 @@ const [metricsLoading, setMetricsLoading] = useState({
     fetchWorkers();
   }, []);
 
+  useEffect(() => {
+    const fetchFraudAlerts = async () => {
+      try {
+        const res = await fraudAPI.getFraudSummary();
+        setFraudAlertsCount(res?.high_risk_active ?? 0);
+      } catch (err) {
+        console.warn('[FRAUD] Failed to fetch alerts:', err.message);
+        setFraudAlertsCount(0);
+      } finally {
+        setMetricsLoading((prev) => ({ ...prev, fraud: false }));
+      }
+    };
+
+    fetchFraudAlerts();
+  }, []);
+
 
 const statCards = [
   {
@@ -249,9 +268,10 @@ const statCards = [
   {
     key: "fraudAlerts",
     label: "Fraud Alerts Active",
+    value: fraudAlertsCount,
     icon: ShieldAlert,
     color: "red",
-    subtitle: "Pending review · 2 High Risk",
+    subtitle: `Pending review · ${fraudAlertsCount} High Risk`,
   },
 ];
 
@@ -383,11 +403,25 @@ const statCards = [
 
   if (isDashboardLoading) {
     return (
-      <div className="min-h-[65vh] flex items-center justify-center rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gigkavach-surface shadow-sm">
+      <div className="min-h-[70vh] flex items-center justify-center rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm">
         <div className="text-center px-6">
-          <div className="mx-auto mb-4 h-11 w-11 rounded-full border-4 border-gray-300/80 dark:border-gray-700 border-t-gigkavach-orange animate-spin" />
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Fetching backend data</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Fetching workers, payouts, and DCI metrics from the backend...</p>
+          <div className="mx-auto mb-6 h-16 w-16 rounded-full border-4 border-gray-300/60 dark:border-gray-700 border-t-blue-500 animate-spin" />
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Loading Dashboard</h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">Fetching workers, payouts, DCI triggers & recent activity from backend...</p>
+          <div className="space-y-2 text-xs text-gray-500 dark:text-gray-500">
+            <div className="flex items-center justify-center gap-2">
+              <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+              <span>Syncing active workers</span>
+            </div>
+            <div className="flex items-center justify-center gap-2">
+              <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse" style={{animationDelay: '0.2s'}} />
+              <span>Loading recent payouts</span>
+            </div>
+            <div className="flex items-center justify-center gap-2">
+              <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" style={{animationDelay: '0.4s'}} />
+              <span>Fetching DCI alerts</span>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -406,6 +440,7 @@ const liveMetrics = {
   payout: todayPayout,
   dci: todayDCI,
   workers: activeWorkers,
+  fraudAlerts: fraudAlertsCount,
 };
 
 const isMetricLoading = metricsLoading[card.key] ?? false;
@@ -432,7 +467,7 @@ const value = liveMetrics[card.key] ?? metrics[card.key] ?? 0;
         <span className="inline-block h-7 w-20 rounded bg-gray-300/70 dark:bg-gray-700 animate-pulse" aria-label="Loading metric" />
       ) : (
         <>
-          {typeof value === "number" && value > 1000 ? value.toLocaleString() : value}
+          {card.key === 'payout' && typeof value === 'number' ? `₹${value.toLocaleString('en-IN')}` : typeof value === "number" && value > 1000 ? value.toLocaleString() : value}
         </>
       )}
     </p>
