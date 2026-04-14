@@ -46,7 +46,7 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
 
     "ask_shift": {
-        "en": "What are your typical working hours?\n1️⃣ Morning (6AM–2PM)\n2️⃣ Day (9AM–9PM)\n3️⃣ Night (6PM–2AM)\n4️⃣ Flexible",
+        "en": "What are your typical working hours?\n1️⃣ Morning (6AM-2PM)\n2️⃣ Evening (2PM-10PM)\n3️⃣ Night (10PM-6AM)\n4️⃣ Flexible",
         "kn": "ನಿಮ್ಮ ಸಾಮಾನ್ಯ ಕೆಲಸದ ಸಮಯ ಯಾವುದು?\n1️⃣ ಬೆಳಿಗ್ಗೆ (6AM–2PM)\n2️⃣ ಹಗಲು (9AM–9PM)\n3️⃣ ರಾತ್ರಿ (6PM–2AM)\n4️⃣ ಯಾವುದಾದರೂ ಸಮಯ",
         "hi": "आप आमतौर पर किस समय काम करते हैं?\n1️⃣ सुबह (6AM–2PM)\n2️⃣ दिन (9AM–9PM)\n3️⃣ रात (6PM–2AM)\n4️⃣ कभी भी",
         "ta": "உங்கள் வேலை நேரம் என்ன?\n1️⃣ காலை (6AM–2PM)\n2️⃣ பகல் (9AM–9PM)\n3️⃣ இரவு (6PM–2AM)\n4️⃣ நெகிழ்வான",

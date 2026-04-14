@@ -17,6 +17,12 @@ from services.whatsapp_service import send_whatsapp_message
 router = APIRouter(tags=["WhatsApp Integration"])
 logger = logging.getLogger("gigkavach.whatsapp")
 
+
+def normalize_whatsapp_phone(phone: str) -> str:
+    """Normalize phone value to digits-only E.164 style without '+' for stable identity mapping."""
+    digits = "".join(ch for ch in (phone or "") if ch.isdigit())
+    return digits
+
 class WhatsAppWebhookRequest(BaseModel):
     phone: str
     body: str
@@ -32,7 +38,7 @@ async def whatsapp_inbound_webhook(
     Main webhook receiver for the WhatsApp bot.
     Bots on 3001 should send callbacks here.
     """
-    phone = req.phone
+    phone = normalize_whatsapp_phone(req.phone)
     message_body = req.body
     
     logger.info(f"📩 [INBOUND] Message from {phone}: {message_body}")

@@ -48,6 +48,16 @@ class VerifyShareTokenResponse(BaseModel):
     expires_in_seconds: Optional[int] = None
     message: str
 
+class UpdateSharedWorkerProfileRequest(BaseModel):
+    gig_platform: Optional[str] = None
+    shift: Optional[str] = None
+    gig_score: Optional[float] = None
+    portfolio_score: Optional[float] = None
+
+
+ALLOWED_PLATFORMS = {"zomato", "swiggy"}
+ALLOWED_SHIFTS = {"flexible", "morning", "day", "evening", "night"}
+
 # ─── Helper Functions ───────────────────────────────────────────────────
 
 def generate_secure_random_token() -> str:
@@ -157,10 +167,8 @@ async def generate_share_token(
         
         logger.info(f"[SHARE_TOKEN] Generated: {token[:8]}... for worker {request.worker_id}")
         
-        # Build share URL (use production URL or default)
-        #frontend_url = getattr(settings, 'FRONTEND_URL', settings.FRONTEND_PRODUCTION_URL or "http://localhost:3000")
-        frontend_url ="http://localhost:3000"
-        share_url = f"{frontend_url}/share/worker/{token}"
+        worker_pwa_url = settings.WORKER_PWA_URL or settings.WORKER_PWA_LOCAL_URL or "http://localhost:4173"
+        share_url = f"{worker_pwa_url}/share/worker/{token}"
         
         return GenerateShareTokenResponse(
             share_token=token,
@@ -367,11 +375,15 @@ async def get_shared_worker_profile(
         
         logger.info(f"[SHARE_TOKEN] Profile fetched for worker {worker_id}")
         
+        shift_value = worker.get("shift", "flexible")
+        shift_display = "Evening" if str(shift_value).lower() == "day" else str(shift_value).capitalize()
+        platform_value = worker.get("gig_platform") or worker.get("platform") or "zomato"
+
         # Return PUBLIC profile only (no phone, email, UPI, etc)
         return {
             "name": worker.get("name", "Unknown"),
-            "platform": worker.get("gig_platform", "—"),
-            "shift": worker.get("shift", "—"),
+            "platform": str(platform_value).capitalize(),
+            "shift": shift_display,
             "plan": worker.get("plan", "—"),
             "gig_score": worker.get("gig_score", 0),
             "portfolio_score": worker.get("portfolio_score", 0),
@@ -384,6 +396,101 @@ async def get_shared_worker_profile(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error fetching profile: {str(e)}"
+        )
+
+
+@router.patch("/profile/{token}")
+async def update_shared_worker_profile(
+    token: str,
+    request: UpdateSharedWorkerProfileRequest,
+    supabase = Depends(get_supabase)
+):
+    """
+    Update worker preferences using share token authentication.
+    This is used by the worker PWA to keep bot and dashboard data in sync.
+    """
+    try:
+        token_result = (
+            supabase.table("share_tokens")
+            .select("worker_id, expires_at")
+            .eq("token", token)
+            .execute()
+        )
+
+        if not token_result.data:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Share token not found")
+
+        token_record = token_result.data[0]
+        expires_at = datetime.fromisoformat(token_record["expires_at"])
+        if datetime.now(timezone.utc) > expires_at:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Share token has expired")
+
+        updates = {}
+
+        if request.gig_platform is not None:
+            platform_norm = request.gig_platform.strip().lower()
+            if platform_norm not in ALLOWED_PLATFORMS:
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Platform must be Zomato or Swiggy")
+            updates["gig_platform"] = platform_norm.capitalize()
+            updates["platform"] = platform_norm
+
+        if request.shift is not None:
+            shift_norm = request.shift.strip().lower()
+            if shift_norm not in ALLOWED_SHIFTS:
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Shift must be Flexible, Morning, Evening, or Night")
+            if shift_norm == "evening":
+                shift_norm = "day"
+            updates["shift"] = shift_norm
+
+        if request.gig_score is not None:
+            gig_score = float(request.gig_score)
+            if gig_score < 0 or gig_score > 100:
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="gig_score must be between 0 and 100")
+            updates["gig_score"] = gig_score
+
+        if request.portfolio_score is not None:
+            portfolio_score = float(request.portfolio_score)
+            if portfolio_score < 0 or portfolio_score > 100:
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="portfolio_score must be between 0 and 100")
+            updates["portfolio_score"] = portfolio_score
+
+        if not updates:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="No valid fields provided")
+
+        updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+        worker_id = token_record["worker_id"]
+        supabase.table("workers").update(updates).eq("id", worker_id).execute()
+
+        refreshed = (
+            supabase.table("workers")
+            .select("name, gig_platform, shift, plan, gig_score, portfolio_score")
+            .eq("id", worker_id)
+            .execute()
+        )
+
+        worker = (refreshed.data or [{}])[0]
+        shift_value = worker.get("shift", "flexible")
+        shift_display = "Evening" if str(shift_value).lower() == "day" else str(shift_value).capitalize()
+
+        return {
+            "message": "Profile updated",
+            "profile": {
+                "name": worker.get("name", "Unknown"),
+                "platform": worker.get("gig_platform", "—"),
+                "shift": shift_display,
+                "plan": worker.get("plan", "—"),
+                "gig_score": worker.get("gig_score", 0),
+                "portfolio_score": worker.get("portfolio_score", 0),
+            },
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[SHARE_TOKEN] Error updating profile: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error updating profile: {str(e)}"
         )
 
 @router.delete("/{token_id}")

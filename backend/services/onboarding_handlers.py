@@ -3,14 +3,16 @@ services/onboarding_handlers.py
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Handles WhatsApp onboarding commands and multi-step conversation flow.
 
-The 5-step onboarding flow:
+The onboarding flow:
   Step 0: Language selection
   Step 1: Platform selection (Zomato/Swiggy)
   Step 2: Shift selection (Morning/Day/Night/Flexible)
-  Step 3: Digilocker verification (mock for sandbox)
-  Step 4: UPI ID collection
-  Step 5: Pin codes collection
-  Step 6: Plan selection (Shield Basic/Plus/Pro)
+    Step 3: Gig score collection
+    Step 4: Portfolio score collection (from delivery count)
+    Step 5: Digilocker verification (mock for sandbox)
+    Step 6: UPI ID collection
+    Step 7: Pin codes collection
+    Step 8: Plan selection (Shield Basic/Plus/Pro)
 
 State is persisted in Redis with key format: `onboarding:{phone}:{step}`
 """
@@ -27,8 +29,8 @@ from .share_tokens_service import generate_share_token
 logger = logging.getLogger("gigkavach.onboarding")
 
 # ─── Config ───────────────────────────────────────────────────────────────────
-REDIS_EXPIRY = 3600  # 1 hour — onboarding state expires after 1 hour
-ONBOARDING_TIMEOUT = 3600  # Worker has 1 hour to complete onboarding
+REDIS_EXPIRY = 7 * 24 * 3600  # 7 days — keep context stable if worker returns later
+ONBOARDING_TIMEOUT = 7 * 24 * 3600  # Worker has up to 7 days to complete onboarding
 
 # ─── Step Definitions ──────────────────────────────────────────────────────────
 
@@ -36,16 +38,81 @@ STEPS = {
     0: "language",
     1: "platform",
     2: "shift",
-    3: "verification",
-    4: "upi",
-    5: "pin_codes",
-    6: "plan",
+    3: "gig_score",
+    4: "portfolio_score",
+    5: "verification",
+    6: "upi",
+    7: "pin_codes",
+    8: "plan",
 }
 
 LANGUAGE_MAP = {"1": "en", "2": "kn", "3": "hi", "4": "ta", "5": "te"}
 PLATFORM_MAP = {"1": "zomato", "2": "swiggy"}
 SHIFT_MAP = {"1": "morning", "2": "day", "3": "night", "4": "flexible"}
 PLAN_MAP = {"1": "basic", "2": "plus", "3": "pro"}
+
+
+def parse_gig_score(raw: str) -> Optional[float]:
+    """
+    Accepts either 0-100 numeric score or star ratings like 4.8/5.
+    Returns normalized 0-100 score.
+    """
+    txt = (raw or "").strip().lower().replace(" ", "")
+    if not txt:
+        return None
+
+    if "/" in txt:
+        try:
+            left, right = txt.split("/", 1)
+            left_v = float(left)
+            right_v = float(right)
+            if right_v <= 0:
+                return None
+            normalized = (left_v / right_v) * 100
+            return max(0.0, min(100.0, round(normalized, 2)))
+        except ValueError:
+            return None
+
+    try:
+        value = float(txt)
+        if 0 <= value <= 5:
+            return max(0.0, min(100.0, round((value / 5.0) * 100, 2)))
+        if 0 <= value <= 100:
+            return round(value, 2)
+    except ValueError:
+        return None
+    return None
+
+
+def deliveries_to_portfolio_score(deliveries: int) -> float:
+    """Maps deliveries completed into 0-100 portfolio score with a 50 baseline for new workers."""
+    if deliveries <= 0:
+        return 50.0
+    if deliveries < 100:
+        return 55.0
+    if deliveries < 500:
+        return 65.0
+    if deliveries < 1500:
+        return 78.0
+    if deliveries < 3000:
+        return 88.0
+    return 95.0
+
+
+def recommend_plan(gig_score: float, portfolio_score: float) -> str:
+    if gig_score >= 80 and portfolio_score >= 70:
+        return "pro"
+    if gig_score >= 70 and portfolio_score >= 50:
+        return "plus"
+    return "basic"
+
+
+def normalize_shift_for_storage(shift_value: str) -> str:
+    """Keep compatibility with existing backend that uses 'day' internally."""
+    val = (shift_value or "").strip().lower()
+    if val == "evening":
+        return "day"
+    return val
 
 
 # ─── Redis Helpers ────────────────────────────────────────────────────────────
@@ -162,12 +229,59 @@ async def handle_shift_selection(phone: str, message: str, state: dict) -> str:
         return f"❌ Invalid choice. {MESSAGES['ask_shift'][lang]}"
     
     shift = SHIFT_MAP[choice]
-    state["shift"] = shift
-    state["step"] = 3  # Move to Step 3 (verification)
+    state["shift"] = normalize_shift_for_storage(shift)
+    state["step"] = 3
     await set_onboarding_state(phone, state)
     
     logger.info(f"📱 {phone} selected shift: {shift}")
-    return MESSAGES["ask_verification"][lang]
+    return (
+        "What's your typical gig economy rating?\n"
+        "Examples: 4.8/5, 4.5, or 90"
+    )
+
+
+async def handle_gig_score_entry(phone: str, message: str, state: dict) -> str:
+    """STEP 3: Collect and normalize gig score to 0-100."""
+    score = parse_gig_score(message)
+    if score is None:
+        return "❌ Please enter a valid rating like 4.8/5, 4.7, or a score between 0 and 100."
+
+    state["gig_score"] = score
+    state["step"] = 4
+    await set_onboarding_state(phone, state)
+
+    if score >= 85:
+        intro = "⭐ Superb rating. You're performing like a pro."
+    elif score < 60:
+        intro = "📈 No worries, we can help improve your score over time."
+    else:
+        intro = "✅ Great, thanks for sharing your rating."
+
+    return (
+        f"{intro}\n"
+        "How many deliveries have you completed so far?\n"
+        "If you're new, reply 0."
+    )
+
+
+async def handle_portfolio_score_entry(phone: str, message: str, state: dict) -> str:
+    """STEP 4: Collect delivery count and convert to portfolio score."""
+    raw = (message or "").strip()
+    if not raw.isdigit():
+        return "❌ Please enter delivery count as a number, for example 0, 250, or 2500."
+
+    deliveries = int(raw)
+    portfolio_score = deliveries_to_portfolio_score(deliveries)
+
+    state["deliveries_completed"] = deliveries
+    state["portfolio_score"] = portfolio_score
+    state["step"] = 5
+    await set_onboarding_state(phone, state)
+
+    return (
+        f"👍 Portfolio score set to {int(portfolio_score)}/100 based on your history.\n"
+        f"{MESSAGES['ask_verification'][state.get('language', 'en')]}"
+    )
 
 async def handle_verification(phone: str, message: str, state: dict) -> str:
     """
@@ -186,7 +300,7 @@ async def handle_verification(phone: str, message: str, state: dict) -> str:
     # For the hackathon synthesis, we set it to 'verified' but with a "vetting" message.
     state["id_verified"] = True 
     state["id_number"] = id_number
-    state["step"] = 4
+    state["step"] = 6
     await set_onboarding_state(phone, state)
     
     logger.info(f"📱 {phone} provided ID for verification: {id_number[:4]}****")
@@ -214,7 +328,7 @@ async def handle_upi_entry(phone: str, message: str, state: dict) -> str:
         return f"❌ Invalid UPI format. Please use format like 'ravi@upi'. {MESSAGES['ask_upi'][lang]}"
     
     state["upi_id"] = upi_id
-    state["step"] = 5
+    state["step"] = 7
     await set_onboarding_state(phone, state)
     
     logger.info(f"📱 {phone} entered UPI: {upi_id}")
@@ -240,11 +354,17 @@ async def handle_pincode_entry(phone: str, message: str, state: dict) -> str:
             return f"❌ Each pin code must be 6 digits. You entered: {pin}. {MESSAGES['ask_pincode'][lang]}"
     
     state["pin_codes"] = pin_codes
-    state["step"] = 6
+    state["step"] = 8
     await set_onboarding_state(phone, state)
     
     logger.info(f"📱 {phone} entered pin codes: {pin_codes}")
-    return MESSAGES["ask_plan"][lang]
+    suggested = recommend_plan(float(state.get("gig_score", 50)), float(state.get("portfolio_score", 50)))
+    suggested_plan_name = "Shield Pro" if suggested == "pro" else "Shield Plus" if suggested == "plus" else "Shield Basic"
+    return (
+        f"{MESSAGES['ask_plan'][lang]}\n\n"
+        f"🤖 Recommended for you: {suggested_plan_name} "
+        f"(Gig Score {int(float(state.get('gig_score', 50)))}, Portfolio {int(float(state.get('portfolio_score', 50)))})"
+    )
 
 
 async def handle_plan_selection(phone: str, message: str, state: dict) -> str:
@@ -267,11 +387,14 @@ async def handle_plan_selection(phone: str, message: str, state: dict) -> str:
             "phone": phone,
             "phone_number": phone,
             "platform": state.get("platform"),
+            "gig_platform": str(state.get("platform", "zomato")).capitalize(),
             "shift": state.get("shift"),
             "upi_id": state.get("upi_id"),
             "pin_codes": state.get("pin_codes", []),
             "language": lang,
             "plan": plan,
+            "gig_score": float(state.get("gig_score", 50)),
+            "portfolio_score": float(state.get("portfolio_score", 50)),
             "coverage_pct": 40 if plan == "basic" else 50 if plan == "plus" else 70,
             "is_active": True,
             "last_seen_at": datetime.now().isoformat(),
@@ -298,11 +421,23 @@ async def handle_plan_selection(phone: str, message: str, state: dict) -> str:
         
         sb.table("policies").insert(policy_data).execute()
         
+        token_data = generate_share_token(
+            worker_id,
+            expires_in_days=7,
+            max_uses=200,
+            reason="WhatsApp onboarding complete"
+        )
+
         # Clear onboarding state
         await clear_onboarding_state(phone)
         
         logger.info(f"✅ Worker {phone} onboarded successfully with plan {plan}")
-        return MESSAGES["onboarding_complete"][lang].format(plan=f"Shield {'Basic' if plan == 'basic' else 'Plus' if plan == 'plus' else 'Pro'}")
+        return (
+            MESSAGES["onboarding_complete"][lang].format(
+                plan=f"Shield {'Basic' if plan == 'basic' else 'Plus' if plan == 'plus' else 'Pro'}"
+            )
+            + f"\n\n📱 Your worker app link: {token_data.get('share_url')}"
+        )
         
     except Exception as e:
         logger.error(f"Error completing onboarding for {phone}: {e}")
@@ -589,8 +724,7 @@ async def handle_profile(phone: str, message: str) -> str:
         # Generate token (valid for 7 days)
         token_data = generate_share_token(wid, expires_in_days=7, max_uses=50, reason="WhatsApp PROFILE command")
         
-        frontend_url = "https://gig-kavach-beryl.vercel.app" # Production URL
-        share_url = f"{frontend_url}/link/{token_data['token']}/profile"
+        share_url = token_data.get("share_url")
         
         msgs = {
             "en": f"📱 *Your GigKavach Profile*\n\nView your GigScore, zone info, and premium details:\n\n{share_url}\n\n⏰ Link expires in 7 days.",
@@ -618,11 +752,10 @@ async def handle_history(phone: str, message: str) -> str:
         
         token_data = generate_share_token(wid, expires_in_days=7, max_uses=50, reason="WhatsApp HISTORY command")
         
-        frontend_url = "https://gig-kavach-beryl.vercel.app"
-        share_url = f"{frontend_url}/link/{token_data['token']}/history"
+        share_url = token_data.get("share_url")
         
         msgs = {
-            "en": f"💰 *Your Transaction History*\n\nView all your payouts and earnings:\n\n{share_url}\n\n⏰ Link expires in 7 days.",
+            "en": f"💰 *Your GigKavach Worker App*\n\nOpen your profile, plan details, and latest preferences:\n\n{share_url}\n\n⏰ Link expires in 7 days.",
             "hi": f"💰 *आपका लेनदेन इतिहास*\n\nयहाँ देखें:\n\n{share_url}",
         }
         return msgs.get(lang, msgs["en"])
@@ -672,12 +805,16 @@ async def route_message(phone: str, body: str) -> str:
         elif step == 2:
             return await handle_shift_selection(phone, body, state)
         elif step == 3:
-            return await handle_verification(phone, body, state)
+            return await handle_gig_score_entry(phone, body, state)
         elif step == 4:
-            return await handle_upi_entry(phone, body, state)
+            return await handle_portfolio_score_entry(phone, body, state)
         elif step == 5:
-            return await handle_pincode_entry(phone, body, state)
+            return await handle_verification(phone, body, state)
         elif step == 6:
+            return await handle_upi_entry(phone, body, state)
+        elif step == 7:
+            return await handle_pincode_entry(phone, body, state)
+        elif step == 8:
             return await handle_plan_selection(phone, body, state)
     
     # Default — ask for valid command
