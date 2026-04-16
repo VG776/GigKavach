@@ -150,13 +150,11 @@ async def register_worker(worker_data: WorkerCreate) -> RegistrationResponse:
         "phone_number":         phone,          # schema column: phone_number
         "phone":                phone,          # legacy alias: phone
         "name":                 getattr(worker_data, 'name', ''),  # optional if WhatsApp flow sets it
-        "platform":             worker_data.platform.value,
         "shift":                worker_data.shift.value,
         "upi_id":               worker_data.upi_id,
         "pin_codes":            worker_data.pin_codes,
         "plan":                 worker_data.plan.value,
         "language":             worker_data.language.value,
-        "gig_score":            100.0,          # perfect trust score on join
         "is_active":            True,
         "coverage_active_from": coverage_active_from.isoformat(),
         "onboarded_at":         now.isoformat(),

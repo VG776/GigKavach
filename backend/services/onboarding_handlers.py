@@ -3,16 +3,18 @@ services/onboarding_handlers.py
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Handles WhatsApp onboarding commands and multi-step conversation flow.
 
-The 5-step onboarding flow:
+The onboarding flow:
   Step 0: Language selection
   Step 1: Platform selection (Zomato/Swiggy)
   Step 2: Shift selection (Morning/Day/Night/Flexible)
-  Step 3: Digilocker verification (mock for sandbox)
-  Step 4: UPI ID collection
-  Step 5: Pin codes collection
-  Step 6: Plan selection (Shield Basic/Plus/Pro)
+    Step 3: Gig score collection
+    Step 4: Portfolio score collection (from delivery count)
+    Step 5: Digilocker verification (mock for sandbox)
+    Step 6: UPI ID collection
+    Step 7: Pin codes collection
+    Step 8: Plan selection (Shield Basic/Plus/Pro)
 
-State is persisted in Redis with key format: `onboarding:{phone}:{step}`
+State is persisted in Redis with key format: `onboarding:{phone}`
 """
 
 import logging
@@ -27,8 +29,8 @@ from .share_tokens_service import generate_share_token
 logger = logging.getLogger("gigkavach.onboarding")
 
 # ─── Config ───────────────────────────────────────────────────────────────────
-REDIS_EXPIRY = 3600  # 1 hour — onboarding state expires after 1 hour
-ONBOARDING_TIMEOUT = 3600  # Worker has 1 hour to complete onboarding
+REDIS_EXPIRY = 7 * 24 * 3600  # 7 days — keep context stable if worker returns later
+ONBOARDING_TIMEOUT = 7 * 24 * 3600  # Worker has up to 7 days to complete onboarding
 
 # ─── Step Definitions ──────────────────────────────────────────────────────────
 
@@ -36,16 +38,118 @@ STEPS = {
     0: "language",
     1: "platform",
     2: "shift",
-    3: "verification",
-    4: "upi",
-    5: "pin_codes",
-    6: "plan",
+    3: "gig_score",
+    4: "portfolio_score",
+    5: "verification",
+    6: "upi",
+    7: "pin_codes",
+    8: "plan",
 }
 
 LANGUAGE_MAP = {"1": "en", "2": "kn", "3": "hi", "4": "ta", "5": "te"}
 PLATFORM_MAP = {"1": "zomato", "2": "swiggy"}
 SHIFT_MAP = {"1": "morning", "2": "day", "3": "night", "4": "flexible"}
 PLAN_MAP = {"1": "basic", "2": "plus", "3": "pro"}
+
+
+def parse_gig_score(raw: str) -> Optional[float]:
+    """
+    Accepts either 0-100 numeric score or star ratings like 4.8/5.
+    Returns normalized 0-100 score.
+    """
+    txt = (raw or "").strip().lower().replace(" ", "")
+    if not txt:
+        return None
+
+    if "/" in txt:
+        try:
+            left, right = txt.split("/", 1)
+            left_v = float(left)
+            right_v = float(right)
+            if right_v <= 0:
+                return None
+            normalized = (left_v / right_v) * 100
+            return max(0.0, min(100.0, round(normalized, 2)))
+        except ValueError:
+            return None
+
+    try:
+        value = float(txt)
+        if 0 <= value <= 5:
+            return max(0.0, min(100.0, round((value / 5.0) * 100, 2)))
+        if 0 <= value <= 100:
+            return round(value, 2)
+    except ValueError:
+        return None
+    return None
+
+
+def deliveries_to_portfolio_score(deliveries: int) -> float:
+    """Maps deliveries completed into 0-100 portfolio score with a 50 baseline for new workers."""
+    if deliveries <= 0:
+        return 50.0
+    if deliveries < 100:
+        return 55.0
+    if deliveries < 500:
+        return 65.0
+    if deliveries < 1500:
+        return 78.0
+    if deliveries < 3000:
+        return 88.0
+    return 95.0
+
+
+def recommend_plan(gig_score: float, portfolio_score: float) -> str:
+    if gig_score >= 80 and portfolio_score >= 70:
+        return "pro"
+    if gig_score >= 70 and portfolio_score >= 50:
+        return "plus"
+    return "basic"
+
+
+def normalize_shift_for_storage(shift_value: str) -> str:
+    """Keep compatibility with existing backend that uses 'day' internally."""
+    val = (shift_value or "").strip().lower()
+    if val == "evening":
+        return "day"
+    return val
+
+
+async def get_worker_by_phone(phone: str) -> Optional[dict]:
+    """Fetch worker record by normalized phone across known phone columns."""
+    sb = get_supabase()
+    result = sb.table("workers").select("*").eq("phone", phone).execute()
+    if result.data:
+        return result.data[0]
+
+    result_alt = sb.table("workers").select("*").eq("phone_number", phone).execute()
+    if result_alt.data:
+        return result_alt.data[0]
+    return None
+
+
+async def is_whatsapp_session_active(phone: str) -> bool:
+    """Checks if a worker has an active PWA-authenticated WhatsApp session."""
+    try:
+        rc = await get_redis()
+        value = await rc.get(f"wa_session:{phone}")
+        return value == "active"
+    except Exception as e:
+        logger.warning(f"Session check failed for {phone}: {e}")
+        return False
+
+
+def format_session_login_prompt(share_url: str) -> str:
+    return (
+        "🔐 Please start this WhatsApp session by logging in via your worker link:\n"
+        f"{share_url}\n\n"
+        "Demo note: DigiLocker verification is mocked and no DigiLocker data is stored."
+    )
+
+
+def get_or_create_worker_share_url(worker_id: str, reason: str) -> str:
+    token_data = generate_share_token(worker_id, expires_in_days=7, max_uses=200, reason=reason)
+    return token_data.get("share_url", "")
 
 
 # ─── Redis Helpers ────────────────────────────────────────────────────────────
@@ -94,12 +198,10 @@ async def handle_join(phone: str, message: str) -> str:
     Worker sends "JOIN" → Ask for language preference
     """
     # Check if already onboarded
-    sb = get_supabase()
-    existing = sb.table("workers").select("id").eq("phone", phone).execute()
-    
-    if existing.data:
-        return MESSAGES.get("already_onboarded", {}).get("en",
-            f"✅ You're already registered! Type STATUS to check coverage.")
+    existing_worker = await get_worker_by_phone(phone)
+    if existing_worker:
+        share_url = get_or_create_worker_share_url(existing_worker["id"], "WhatsApp JOIN session login")
+        return format_session_login_prompt(share_url)
     
     # Initialize onboarding state
     state = {
@@ -162,31 +264,80 @@ async def handle_shift_selection(phone: str, message: str, state: dict) -> str:
         return f"❌ Invalid choice. {MESSAGES['ask_shift'][lang]}"
     
     shift = SHIFT_MAP[choice]
-    state["shift"] = shift
-    state["step"] = 3  # Move to Step 3 (verification)
+    state["shift"] = normalize_shift_for_storage(shift)
+    state["step"] = 3
     await set_onboarding_state(phone, state)
     
     logger.info(f"📱 {phone} selected shift: {shift}")
-    return MESSAGES["ask_verification"][lang]
+    return (
+        "What's your typical gig economy rating?\n"
+        "Examples: 4.8/5, 4.5, or 90"
+    )
+
+
+async def handle_gig_score_entry(phone: str, message: str, state: dict) -> str:
+    """STEP 3: Collect and normalize gig score to 0-100."""
+    score = parse_gig_score(message)
+    if score is None:
+        return "❌ Please enter a valid rating like 4.8/5, 4.7, or a score between 0 and 100."
+    
+    lang = state.get("language", "en")
+    state["gig_score"] = score
+    state["step"] = 4
+    await set_onboarding_state(phone, state)
+
+    if score >= 85:
+        intro = "⭐ Superb rating. You're performing like a pro."
+    elif score < 60:
+        intro = "📈 No worries, we can help improve your score over time."
+    else:
+        intro = "✅ Great, thanks for sharing your rating."
+
+    return (
+        f"{intro}\n"
+        "How many deliveries have you completed so far?\n"
+        "If you're new, reply 0."
+    )
+
+
+async def handle_portfolio_score_entry(phone: str, message: str, state: dict) -> str:
+    """STEP 4: Collect delivery count and convert to portfolio score."""
+    lang = state.get("language", "en")
+    raw = (message or "").strip()
+    if not raw.isdigit():
+        return f"❌ Please enter delivery count as a number, for example 0, 250, or 2500. {MESSAGES['ask_deliveries'][lang]}"
+
+    deliveries = int(raw)
+    portfolio_score = deliveries_to_portfolio_score(deliveries)
+
+    state["deliveries_completed"] = deliveries
+    state["portfolio_score"] = portfolio_score
+    state["step"] = 5
+    await set_onboarding_state(phone, state)
+
+    return (
+        f"{MESSAGES['portfolio_confirmation'][lang].format(score=int(portfolio_score))}\n"
+        f"{MESSAGES['ask_verification'][lang]}"
+    )
 
 async def handle_verification(phone: str, message: str, state: dict) -> str:
     """
-    STEP 3 → STEP 4: Process Identity Vetting
+    STEP 5 → STEP 6: Process Identity Vetting
     Workers provide Aadhaar/DL for manual or automated KYC vetting.
     Sets status to 'pending' to maintain production realism.
     """
     lang = state.get("language", "en")
-    id_number = message.strip()
+    # Validation: must be at least 5 chars (remove non-alphanumeric for check/storage)
+    id_number = "".join(ch for ch in message.strip() if ch.isalnum())
     
-    # Validation: must be at least 8 chars
-    if len(id_number) < 8:
+    if len(id_number) < 5:
         return f"❌ Please enter a valid ID number (Aadhaar/DL). {MESSAGES['ask_verification'][lang]}"
     
     # In production, we would trigger an external KYC API here.
     # For the hackathon synthesis, we set it to 'verified' but with a "vetting" message.
     state["id_verified"] = True 
     state["id_number"] = id_number
-    state["step"] = 4
+    state["step"] = 6
     await set_onboarding_state(phone, state)
     
     logger.info(f"📱 {phone} provided ID for verification: {id_number[:4]}****")
@@ -207,14 +358,14 @@ async def handle_upi_entry(phone: str, message: str, state: dict) -> str:
     STEP 4: Collect UPI ID and validate format (basic)
     """
     lang = state.get("language", "en")
-    upi_id = message.strip()
+    upi_id = "".join(message.split()).lower()  # Remove all internal spaces and lowercase
     
     # Basic validation: must contain @
     if "@" not in upi_id:
         return f"❌ Invalid UPI format. Please use format like 'ravi@upi'. {MESSAGES['ask_upi'][lang]}"
     
     state["upi_id"] = upi_id
-    state["step"] = 5
+    state["step"] = 7
     await set_onboarding_state(phone, state)
     
     logger.info(f"📱 {phone} entered UPI: {upi_id}")
@@ -240,11 +391,18 @@ async def handle_pincode_entry(phone: str, message: str, state: dict) -> str:
             return f"❌ Each pin code must be 6 digits. You entered: {pin}. {MESSAGES['ask_pincode'][lang]}"
     
     state["pin_codes"] = pin_codes
-    state["step"] = 6
+    state["step"] = 8
     await set_onboarding_state(phone, state)
     
     logger.info(f"📱 {phone} entered pin codes: {pin_codes}")
-    return MESSAGES["ask_plan"][lang]
+    suggested = recommend_plan(float(state.get("gig_score", 50)), float(state.get("portfolio_score", 50)))
+    suggested_plan_name = "Shield Pro" if suggested == "pro" else "Shield Plus" if suggested == "plus" else "Shield Basic"
+    recommendation = MESSAGES["recommended_for_you"][lang].format(plan=suggested_plan_name)
+    return (
+        f"{MESSAGES['ask_plan'][lang]}\n\n"
+        f"{recommendation}\n"
+        f"🤖 (Based on Gig Score {int(float(state.get('gig_score', 50)))}, Portfolio {int(float(state.get('portfolio_score', 50)))})"
+    )
 
 
 async def handle_plan_selection(phone: str, message: str, state: dict) -> str:
@@ -263,65 +421,158 @@ async def handle_plan_selection(phone: str, message: str, state: dict) -> str:
     # Save worker to Supabase
     try:
         sb = get_supabase()
+        now = datetime.now()
+        
+        # 24-hour coverage delay for new workers
+        coverage_active_from = now + timedelta(hours=24)
+        
+        # Current week window
+        today = now.date()
+        monday = today - timedelta(days=today.weekday())
+        sunday = monday + timedelta(days=6)
+        
         worker_data = {
             "phone": phone,
             "phone_number": phone,
-            "platform": state.get("platform"),
+            "gig_platform": str(state.get("platform", "zomato")).capitalize(),
+            "gig_score": float(state.get("gig_score", 50)),
             "shift": state.get("shift"),
             "upi_id": state.get("upi_id"),
             "pin_codes": state.get("pin_codes", []),
             "language": lang,
             "plan": plan,
+            "gig_score": float(state.get("gig_score", 50)),
+            "portfolio_score": float(state.get("portfolio_score", 50)),
             "coverage_pct": 40 if plan == "basic" else 50 if plan == "plus" else 70,
             "is_active": True,
-            "last_seen_at": datetime.now().isoformat(),
+            "onboarded_at": now.isoformat(),
+            "last_seen_at": now.isoformat(),
+            "created_at": now.isoformat(),
+            "updated_at": now.isoformat()
         }
         
         response = sb.table("workers").insert(worker_data).execute()
         
         if not response.data:
-            logger.error(f"Failed to insert worker {phone} into Supabase")
+            logger.error(f"Failed to insert worker {phone} into Supabase: {response}")
             return f"⚠️ Registration failed. Please try again."
         
         worker_id = response.data[0]["id"]
         
-        # Create initial policy (coverage starts tomorrow)
-        tomorrow = (datetime.now() + timedelta(days=1)).date()
+        # Create initial policy
+        tomorrow = now + timedelta(days=1)
         policy_data = {
             "worker_id": worker_id,
             "plan": plan,
             "status": "active",
-            "week_start": str(tomorrow),
-            "coverage_pct": worker_data["coverage_pct"],
-            "weekly_premium": 30 if plan == "basic" else 37 if plan == "plus" else 44,
+            "week_start": monday.isoformat(),
+            "week_end": sunday.isoformat(),
+            "weekly_premium": float(30 if plan == 'basic' else 37 if plan == 'plus' else 44),
+            "coverage_pct": int(40 if plan == 'basic' else 50 if plan == 'plus' else 70),
+            "coverage_active_from": tomorrow.date().isoformat(),
+            "created_at": now.isoformat()
         }
         
         sb.table("policies").insert(policy_data).execute()
         
+        token_data = generate_share_token(
+            worker_id,
+            expires_in_days=7,
+            max_uses=200,
+            reason="WhatsApp onboarding complete"
+        )
+
         # Clear onboarding state
         await clear_onboarding_state(phone)
         
         logger.info(f"✅ Worker {phone} onboarded successfully with plan {plan}")
-        return MESSAGES["onboarding_complete"][lang].format(plan=f"Shield {'Basic' if plan == 'basic' else 'Plus' if plan == 'plus' else 'Pro'}")
+        return (
+            MESSAGES["onboarding_complete"][lang].format(
+                plan=f"Shield {'Basic' if plan == 'basic' else 'Plus' if plan == 'plus' else 'Pro'}"
+            )
+            + f"\n\n📱 Your worker app link: {token_data.get('share_url')}"
+        )
         
     except Exception as e:
         logger.error(f"Error completing onboarding for {phone}: {e}")
-        return f"⚠️ Error during registration: {str(e)}"
+        return (
+            "⚠️ We hit a temporary setup issue while creating your profile. "
+            "Please try again in a moment, or type HELP."
+        )
 
 
-async def handle_status(phone: str, message: str) -> str:
+async def handle_start(phone: str, message: str) -> str:
+    """
+    START command — Mark shift as started and provide pwa link
+    """
+    try:
+        sb = get_supabase()
+        worker = await get_worker_by_phone(phone)
+        if not worker:
+            return "❌ Not registered. Reply with JOIN."
+
+        # Update status in Redis
+        from utils.redis_client import get_redis
+        rc = await get_redis()
+        await rc.set(f"shift_status:{phone}", "on", ex=86400) # 24h expiry
+        
+        # Also update last_seen_at and is_on_shift in DB if column exists
+        now = datetime.now()
+        update_data = {"last_seen_at": now.isoformat(), "is_on_shift": True}
+        try:
+            sb.table("workers").update(update_data).eq("phone_number", phone).execute()
+        except:
+            # Fallback for older schemas
+            sb.table("workers").update({"last_seen_at": now.isoformat()}).eq("phone_number", phone).execute()
+
+        # Generate login prompt as requested (ss message)
+        share_url = get_or_create_worker_share_url(worker["id"], "WhatsApp START shift login")
+        return format_session_login_prompt(share_url)
+
+    except Exception as e:
+        logger.error(f"Error in START for {phone}: {e}")
+        return "⚠️ Error starting shift. Please try again."
+
+
+async def handle_stop(phone: str, message: str) -> str:
+    """
+    STOP command — Mark shift as ended
+    """
+    try:
+        sb = get_supabase()
+        worker = await get_worker_by_phone(phone)
+        if not worker:
+            return "❌ Not registered. Reply with JOIN."
+
+        # Update status in Redis
+        from utils.redis_client import get_redis
+        rc = await get_redis()
+        await rc.delete(f"shift_status:{phone}")
+
+        # Update DB if column exists
+        try:
+            sb.table("workers").update({"is_on_shift": False}).eq("phone_number", phone).execute()
+        except: pass
+
+        lang = worker.get("language", "en")
+        from .whatsapp_service import MESSAGES
+        return MESSAGES["shift_ended"].get(lang, MESSAGES["shift_ended"]["en"])
+
+    except Exception as e:
+        logger.error(f"Error in STOP for {phone}: {e}")
+        return "⚠️ Error stopping shift. Please try again."
+
+
+async def handle_status(phone: str, body: str) -> str:
     """
     STATUS command — Show worker's current coverage and zone DCI
     """
     try:
         sb = get_supabase()
-        
-        # Get worker
-        worker_response = sb.table("workers").select("*").eq("phone", phone).execute()
-        if not worker_response.data:
+        worker = await get_worker_by_phone(phone)
+        if not worker:
             return "❌ Not registered yet. Reply with JOIN to start."
-        
-        worker = worker_response.data[0]
+
         lang = worker.get("language", "en")
         
         # Get active policy
@@ -371,12 +622,18 @@ async def handle_status(phone: str, message: str) -> str:
             dci_score = 0
             severity = "unknown"
 
+        # Check real-time shift status in Redis
+        from utils.redis_client import get_redis
+        rc = await get_redis()
+        is_on_shift = await rc.get(f"shift_status:{phone}")
+        shift_icon = "🟢 ACTIVE (" if is_on_shift == "on" else "🔴 OFF ("
+        shift_label = f"{shift_icon}{worker.get('shift', 'N/A').title()})"
         return MESSAGES["status_response"][lang].format(
             pin_code=pin_code,
             dci=dci_score,
             severity=severity,
             plan=f"Shield {'Basic' if plan == 'basic' else 'Plus' if plan == 'plus' else 'Pro'}",
-            shift=worker.get("shift", "N/A").title()
+            shift=shift_label
         )
 
         
@@ -391,12 +648,10 @@ async def handle_renew(phone: str, message: str) -> str:
     """
     try:
         sb = get_supabase()
-        
-        worker_response = sb.table("workers").select("*").eq("phone", phone).execute()
-        if not worker_response.data:
+        worker = await get_worker_by_phone(phone)
+        if not worker:
             return "❌ Not registered. Reply with JOIN."
-        
-        worker = worker_response.data[0]
+
         lang = worker.get("language", "en")
         plan = worker.get("plan")
         
@@ -438,12 +693,10 @@ async def handle_shift_update(phone: str, message: str) -> str:
     """
     try:
         sb = get_supabase()
-        
-        worker_response = sb.table("workers").select("*").eq("phone", phone).execute()
-        if not worker_response.data:
+        worker = await get_worker_by_phone(phone)
+        if not worker:
             return "❌ Not registered. Reply with JOIN."
-        
-        worker = worker_response.data[0]
+
         lang = worker.get("language", "en")
         
         # Parse shift choice from message
@@ -479,12 +732,9 @@ async def handle_language_change(phone: str, message: str) -> str:
     """
     try:
         sb = get_supabase()
-        
-        worker_response = sb.table("workers").select("*").eq("phone", phone).execute()
-        if not worker_response.data:
+        worker = await get_worker_by_phone(phone)
+        if not worker:
             return "❌ Not registered. Reply with JOIN."
-        
-        worker = worker_response.data[0]
         
         # Parse language choice
         parts = message.strip().split()
@@ -518,12 +768,32 @@ async def handle_help(phone: str, message: str) -> str:
     HELP command — Show all available commands
     """
     try:
-        sb = get_supabase()
+        worker = await get_worker_by_phone(phone)
+        lang = worker.get("language", "en") if worker else "en"
         
-        worker_response = sb.table("workers").select("language").eq("phone", phone).execute()
-        lang = worker_response.data[0].get("language", "en") if worker_response.data else "en"
-        
-        return MESSAGES["help"][lang]
+        msgs = {
+            "en": (
+                "🤖 *GigKavach Bot Commands*\n\n"
+                "• *JOIN* - Start onboarding\n"
+                "• *START* - Start your shift (Eligibility ON)\n"
+                "• *STOP* - End your shift (Eligibility OFF)\n"
+                "• *PROFILE* - Get your PWA link\n"
+                "• *STATUS* - Check current protection status\n"
+                "• *RENEW* - Renew your weekly policy\n"
+                "• *HISTORY* - View your payout history\n"
+                "• *HELP* - Show this menu"
+            ),
+            "hi": (
+                "🤖 *GigKavach कमांड*\n\n"
+                "• *JOIN* - पंजीकरण शुरू करें\n"
+                "• *START* - अपनी शिफ्ट शुरू करें\n"
+                "• *STOP* - अपनी शिफ्ट खत्म करें\n"
+                "• *PROFILE* - अपनी प्रोफाइल देखें\n"
+                "• *STATUS* - अपनी स्थिति जांचें\n"
+                "• *HELP* - मदद के लिए"
+            )
+        }
+        return msgs.get(lang, msgs["en"])
         
     except Exception as e:
         logger.error(f"Error in HELP for {phone}: {e}")
@@ -537,12 +807,10 @@ async def handle_appeal(phone: str, message: str) -> str:
     """
     try:
         sb = get_supabase()
-        
-        worker_response = sb.table("workers").select("*").eq("phone", phone).execute()
-        if not worker_response.data:
+        worker = await get_worker_by_phone(phone)
+        if not worker:
             return "❌ Not registered. Reply with JOIN."
-        
-        worker = worker_response.data[0]
+
         lang = worker.get("language", "en")
         
         # Create appeal record
@@ -578,19 +846,17 @@ async def handle_profile(phone: str, message: str) -> str:
     PROFILE command — Generate a secure PWA link for the worker's profile
     """
     try:
-        sb = get_supabase()
-        worker = sb.table("workers").select("id, language").eq("phone", phone).single().execute()
-        if not worker.data:
+        worker = await get_worker_by_phone(phone)
+        if not worker:
             return "❌ Not registered. Reply with JOIN."
-        
-        wid = worker.data["id"]
-        lang = worker.data.get("language", "en")
+
+        wid = worker["id"]
+        lang = worker.get("language", "en")
         
         # Generate token (valid for 7 days)
         token_data = generate_share_token(wid, expires_in_days=7, max_uses=50, reason="WhatsApp PROFILE command")
         
-        frontend_url = "https://gig-kavach-beryl.vercel.app" # Production URL
-        share_url = f"{frontend_url}/link/{token_data['token']}/profile"
+        share_url = token_data.get("share_url")
         
         msgs = {
             "en": f"📱 *Your GigKavach Profile*\n\nView your GigScore, zone info, and premium details:\n\n{share_url}\n\n⏰ Link expires in 7 days.",
@@ -608,21 +874,19 @@ async def handle_history(phone: str, message: str) -> str:
     HISTORY command — Generate a secure PWA link for the worker's transaction history
     """
     try:
-        sb = get_supabase()
-        worker = sb.table("workers").select("id, language").eq("phone", phone).single().execute()
-        if not worker.data:
+        worker = await get_worker_by_phone(phone)
+        if not worker:
             return "❌ Not registered. Reply with JOIN."
-        
-        wid = worker.data["id"]
-        lang = worker.data.get("language", "en")
+
+        wid = worker["id"]
+        lang = worker.get("language", "en")
         
         token_data = generate_share_token(wid, expires_in_days=7, max_uses=50, reason="WhatsApp HISTORY command")
         
-        frontend_url = "https://gig-kavach-beryl.vercel.app"
-        share_url = f"{frontend_url}/link/{token_data['token']}/history"
+        share_url = token_data.get("share_url")
         
         msgs = {
-            "en": f"💰 *Your Transaction History*\n\nView all your payouts and earnings:\n\n{share_url}\n\n⏰ Link expires in 7 days.",
+            "en": f"💰 *Your GigKavach Worker App*\n\nOpen your profile, plan details, and latest preferences:\n\n{share_url}\n\n⏰ Link expires in 7 days.",
             "hi": f"💰 *आपका लेनदेन इतिहास*\n\nयहाँ देखें:\n\n{share_url}",
         }
         return msgs.get(lang, msgs["en"])
@@ -639,9 +903,24 @@ async def route_message(phone: str, body: str) -> str:
     Main router — dispatch to appropriate handler based on message content and current step
     """
     keyword = body.strip().upper().split()[0] if body.strip() else ""
+    # If worker is already registered, require a PWA login link at the start of each session.
+    worker = await get_worker_by_phone(phone)
+    if worker and keyword in {"LOGIN", "START", "SESSION"}:
+        share_url = get_or_create_worker_share_url(worker["id"], "WhatsApp explicit session login")
+        return format_session_login_prompt(share_url)
+
+    if worker and keyword not in {"HELP", "PROFILE", "HISTORY", "LOGIN", "START", "SESSION", "JOIN"}:
+        session_active = await is_whatsapp_session_active(phone)
+        if not session_active:
+            share_url = get_or_create_worker_share_url(worker["id"], "WhatsApp auto session login")
+            return format_session_login_prompt(share_url)
     
-    # Commands that work anytime for registered users
-    if keyword == "STATUS":
+    # Global commands
+    if keyword == "START":
+        return await handle_start(phone, body)
+    elif keyword == "STOP":
+        return await handle_stop(phone, body)
+    elif keyword == "STATUS":
         return await handle_status(phone, body)
     elif keyword == "RENEW":
         return await handle_renew(phone, body)
@@ -664,7 +943,6 @@ async def route_message(phone: str, body: str) -> str:
     state = await get_onboarding_state(phone)
     if state:
         step = state.get("step", 0)
-        
         if step == 0:
             return await handle_language_selection(phone, body, state)
         elif step == 1:
@@ -672,14 +950,18 @@ async def route_message(phone: str, body: str) -> str:
         elif step == 2:
             return await handle_shift_selection(phone, body, state)
         elif step == 3:
-            return await handle_verification(phone, body, state)
+            return await handle_gig_score_entry(phone, body, state)
         elif step == 4:
-            return await handle_upi_entry(phone, body, state)
+            return await handle_portfolio_score_entry(phone, body, state)
         elif step == 5:
-            return await handle_pincode_entry(phone, body, state)
+            return await handle_verification(phone, body, state)
         elif step == 6:
+            return await handle_upi_entry(phone, body, state)
+        elif step == 7:
+            return await handle_pincode_entry(phone, body, state)
+        elif step == 8:
             return await handle_plan_selection(phone, body, state)
     
     # Default — ask for valid command
-    return MESSAGES["help"]["en"]
+    return f"👋 Welcome to GigKavach! {MESSAGES['help']['en']}" if not worker else MESSAGES["unknown_command"]["en"]
 

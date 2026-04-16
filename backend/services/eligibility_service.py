@@ -65,6 +65,11 @@ async def check_eligibility(worker_id: str, dci_event: dict) -> tuple[bool, str]
             return False, "WORKER_NOT_FOUND"
         
         worker = worker_response.data[0]
+        
+        # RULE 3: Check if worker has explicitly started shift via WhatsApp (START command)
+        if not worker.get("is_on_shift", False):
+            return False, "SHIFT_NOT_STARTED_VIA_WHATSAPP"
+
         worker_shift = worker.get("shift", "flexible")
         
         # Check if disruption is within worker's shift window

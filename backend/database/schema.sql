@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS workers (
     coverage_active_from TIMESTAMP WITH TIME ZONE,  -- 24-hr delay for new worker moral hazard prevention
     onboarded_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc', now()),
     is_active BOOLEAN DEFAULT true,
+    is_on_shift BOOLEAN DEFAULT false,
     last_seen_at TIMESTAMP WITH TIME ZONE,
     rzp_contact_id VARCHAR(100),                    -- RazorpayX Contact ID
     rzp_fund_account_id VARCHAR(100),               -- RazorpayX Fund Account ID (VPA)

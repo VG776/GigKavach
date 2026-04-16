@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     FRONTEND_LOCAL_URL: str = "http://localhost:5173"
     FRONTEND_PRODUCTION_URL: str = "https://gigkavach-delta.vercel.app"  # Set in .env when deployed (e.g., https://app.vercel.app)
     FRONTEND_URL: str = "https://app.devtrails.com"  # Public share links use this URL
+    WORKER_PWA_LOCAL_URL: str = "http://localhost:4173"
+    WORKER_PWA_URL: str = "https://worker.app.devtrails.com"
 
     # ── Supabase ──────────────────────────────────────────────────────
     SUPABASE_URL: str = ""

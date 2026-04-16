@@ -39,11 +39,12 @@ def generate_share_token(worker_id: str, expires_in_days: int = 7, max_uses: Opt
         if not result.data:
             raise Exception("Failed to store share token in database")
             
-        frontend_url = settings.FRONTEND_URL or "https://gig-kavach-beryl.vercel.app"
-        share_url = f"{frontend_url}/link/{token}/profile"
+        worker_pwa_url = settings.WORKER_PWA_URL or settings.WORKER_PWA_LOCAL_URL or "http://localhost:4173"
+        share_url = f"{worker_pwa_url}/share/worker/{token}"
         
         return {
             "share_token": token,
+            "token": token,
             "share_url": share_url,
             "worker_id": worker_id,
             "expires_at": expires_at.isoformat(),
@@ -52,11 +53,12 @@ def generate_share_token(worker_id: str, expires_in_days: int = 7, max_uses: Opt
     except Exception as e:
         logger.error(f"[SHARE_TOKEN_SERVICE] Error generating token: {str(e)}")
         # Provide a fallback mock token if DB fails so the bot flow doesn't break
-        frontend_url = settings.FRONTEND_URL or "https://gig-kavach-beryl.vercel.app"
+        worker_pwa_url = settings.WORKER_PWA_URL or settings.WORKER_PWA_LOCAL_URL or "http://localhost:4173"
         fallback_token = f"fallback_{secrets.token_urlsafe(8)}"
         return {
             "share_token": fallback_token,
-            "share_url": f"{frontend_url}/link/{fallback_token}/profile",
+            "token": fallback_token,
+            "share_url": f"{worker_pwa_url}/share/worker/{fallback_token}",
             "worker_id": worker_id,
             "expires_at": (datetime.utcnow() + timedelta(days=1)).isoformat()
         }
