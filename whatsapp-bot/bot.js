@@ -314,11 +314,15 @@ app.post('/broadcast-disruption-alert', async (req, res) => {
 
     for (const phone of worker_phones) {
       try {
-        const phoneFormatted = `${phone}@c.us`;
-        await client.sendMessage(phoneFormatted, baseMessage);
+        await messageQueue.enqueue(phone, baseMessage, {
+          type: 'disruption_broadcast',
+          pincode: pincode,
+          dci: dci_score,
+          severity: severity
+        });
         results.sent.push(phone);
       } catch (error) {
-        log.error(`Failed to send to ${phone}: ${error.message}`);
+        log.error(`Failed to enqueue for ${phone}: ${error.message}`);
         results.failed.push({ phone, error: error.message });
       }
     }

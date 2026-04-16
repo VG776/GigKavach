@@ -14,7 +14,7 @@ The onboarding flow:
     Step 7: Pin codes collection
     Step 8: Plan selection (Shield Basic/Plus/Pro)
 
-State is persisted in Redis with key format: `onboarding:{phone}:{step}`
+State is persisted in Redis with key format: `onboarding:{phone}`
 """
 
 import logging
@@ -277,14 +277,15 @@ async def handle_shift_selection(phone: str, message: str, state: dict) -> str:
 
 async def handle_gig_score_entry(phone: str, message: str, state: dict) -> str:
     """STEP 3: Collect and normalize gig score to 0-100."""
+<<<<<<< HEAD
     score = parse_gig_score(message)
     if score is None:
         return "❌ Please enter a valid rating like 4.8/5, 4.7, or a score between 0 and 100."
+    lang = state.get("language", "en")
+    score = parse_gig_score(message)
+    if score is None:
 
-    state["gig_score"] = score
-    state["step"] = 4
-    await set_onboarding_state(phone, state)
-
+<<<<<<< HEAD
     if score >= 85:
         intro = "⭐ Superb rating. You're performing like a pro."
     elif score < 60:
@@ -297,13 +298,23 @@ async def handle_gig_score_entry(phone: str, message: str, state: dict) -> str:
         "How many deliveries have you completed so far?\n"
         "If you're new, reply 0."
     )
+=======
+    return MESSAGES["ask_deliveries"][lang]
+>>>>>>> 10baad6 (WhatsApp and PWA Dashboard)
 
 
 async def handle_portfolio_score_entry(phone: str, message: str, state: dict) -> str:
     """STEP 4: Collect delivery count and convert to portfolio score."""
+<<<<<<< HEAD
     raw = (message or "").strip()
     if not raw.isdigit():
         return "❌ Please enter delivery count as a number, for example 0, 250, or 2500."
+=======
+    lang = state.get("language", "en")
+    raw = (message or "").strip()
+    if not raw.isdigit():
+        return f"❌ Please enter delivery count as a number, for example 0, 250, or 2500. {MESSAGES['ask_deliveries'][lang]}"
+>>>>>>> 10baad6 (WhatsApp and PWA Dashboard)
 
     deliveries = int(raw)
     portfolio_score = deliveries_to_portfolio_score(deliveries)
@@ -314,21 +325,37 @@ async def handle_portfolio_score_entry(phone: str, message: str, state: dict) ->
     await set_onboarding_state(phone, state)
 
     return (
+<<<<<<< HEAD
         f"👍 Portfolio score set to {int(portfolio_score)}/100 based on your history.\n"
         f"{MESSAGES['ask_verification'][state.get('language', 'en')]}"
+=======
+        f"{MESSAGES['portfolio_confirmation'][lang].format(score=int(portfolio_score))}\n"
+        f"{MESSAGES['ask_verification'][lang]}"
+>>>>>>> 10baad6 (WhatsApp and PWA Dashboard)
     )
 
 async def handle_verification(phone: str, message: str, state: dict) -> str:
     """
+<<<<<<< HEAD
     STEP 3 → STEP 4: Process Identity Vetting
+=======
+    STEP 5 → STEP 6: Process Identity Vetting
+>>>>>>> 10baad6 (WhatsApp and PWA Dashboard)
     Workers provide Aadhaar/DL for manual or automated KYC vetting.
     Sets status to 'pending' to maintain production realism.
     """
     lang = state.get("language", "en")
+<<<<<<< HEAD
     id_number = message.strip()
     
     # Validation: must be at least 8 chars
     if len(id_number) < 8:
+=======
+    # Validation: must be at least 8 chars (remove non-alphanumeric for check/storage)
+    id_number = "".join(ch for ch in message.strip() if ch.isalnum())
+    
+    if len(id_number) < 5:
+>>>>>>> 10baad6 (WhatsApp and PWA Dashboard)
         return f"❌ Please enter a valid ID number (Aadhaar/DL). {MESSAGES['ask_verification'][lang]}"
     
     # In production, we would trigger an external KYC API here.
@@ -356,7 +383,7 @@ async def handle_upi_entry(phone: str, message: str, state: dict) -> str:
     STEP 4: Collect UPI ID and validate format (basic)
     """
     lang = state.get("language", "en")
-    upi_id = message.strip()
+    upi_id = "".join(message.split()).lower()  # Remove all internal spaces and lowercase
     
     # Basic validation: must contain @
     if "@" not in upi_id:
@@ -395,11 +422,17 @@ async def handle_pincode_entry(phone: str, message: str, state: dict) -> str:
     logger.info(f"📱 {phone} entered pin codes: {pin_codes}")
     suggested = recommend_plan(float(state.get("gig_score", 50)), float(state.get("portfolio_score", 50)))
     suggested_plan_name = "Shield Pro" if suggested == "pro" else "Shield Plus" if suggested == "plus" else "Shield Basic"
+<<<<<<< HEAD
     return (
         f"{MESSAGES['ask_plan'][lang]}\n\n"
         f"🤖 Recommended for you: {suggested_plan_name} "
         f"(Gig Score {int(float(state.get('gig_score', 50)))}, Portfolio {int(float(state.get('portfolio_score', 50)))})"
     )
+=======
+    
+    recommendation = MESSAGES["recommended_for_you"][lang].format(plan=suggested_plan_name)
+    return f"{MESSAGES['ask_plan'][lang]}\n\n{recommendation}"
+>>>>>>> 10baad6 (WhatsApp and PWA Dashboard)
 
 
 async def handle_plan_selection(phone: str, message: str, state: dict) -> str:
@@ -418,39 +451,64 @@ async def handle_plan_selection(phone: str, message: str, state: dict) -> str:
     # Save worker to Supabase
     try:
         sb = get_supabase()
+        now = datetime.now()
+        
+        # 24-hour coverage delay for new workers
+        coverage_active_from = now + timedelta(hours=24)
+        
+        # Current week window
+        today = now.date()
+        monday = today - timedelta(days=today.weekday())
+        sunday = monday + timedelta(days=6)
+        
         worker_data = {
             "phone": phone,
             "phone_number": phone,
+<<<<<<< HEAD
             "gig_platform": str(state.get("platform", "zomato")).capitalize(),
+=======
+            "name": "Worker",
+            "gig_platform": state.get("platform"),
+            "gig_score": float(state.get("gig_score", 50)),
+>>>>>>> 10baad6 (WhatsApp and PWA Dashboard)
             "shift": state.get("shift"),
             "upi_id": state.get("upi_id"),
             "pin_codes": state.get("pin_codes", []),
             "language": lang,
             "plan": plan,
+<<<<<<< HEAD
             "gig_score": float(state.get("gig_score", 50)),
             "portfolio_score": float(state.get("portfolio_score", 50)),
             "coverage_pct": 40 if plan == "basic" else 50 if plan == "plus" else 70,
+=======
+>>>>>>> 10baad6 (WhatsApp and PWA Dashboard)
             "is_active": True,
-            "last_seen_at": datetime.now().isoformat(),
+            "onboarded_at": now.isoformat(),
+            "last_seen_at": now.isoformat(),
+            "created_at": now.isoformat(),
+            "updated_at": now.isoformat()
         }
         
         response = sb.table("workers").insert(worker_data).execute()
         
         if not response.data:
-            logger.error(f"Failed to insert worker {phone} into Supabase")
+            logger.error(f"Failed to insert worker {phone} into Supabase: {response}")
             return f"⚠️ Registration failed. Please try again."
         
         worker_id = response.data[0]["id"]
         
-        # Create initial policy (coverage starts tomorrow)
-        tomorrow = (datetime.now() + timedelta(days=1)).date()
+        # Create initial policy
+        tomorrow = now + timedelta(days=1)
         policy_data = {
             "worker_id": worker_id,
             "plan": plan,
             "status": "active",
-            "week_start": str(tomorrow),
-            "coverage_pct": worker_data["coverage_pct"],
-            "weekly_premium": 30 if plan == "basic" else 37 if plan == "plus" else 44,
+            "week_start": monday.isoformat(),
+            "week_end": sunday.isoformat(),
+            "weekly_premium": float(30 if plan == 'basic' else 37 if plan == 'plus' else 44),
+            "coverage_pct": int(40 if plan == 'basic' else 50 if plan == 'plus' else 70),
+            "coverage_active_from": tomorrow.date().isoformat(),
+            "created_at": now.isoformat()
         }
         
         sb.table("policies").insert(policy_data).execute()
@@ -481,15 +539,84 @@ async def handle_plan_selection(phone: str, message: str, state: dict) -> str:
         )
 
 
-async def handle_status(phone: str, message: str) -> str:
+async def handle_start(phone: str, message: str) -> str:
+    """
+    START command — Mark shift as started and provide pwa link
+    """
+    try:
+        sb = get_supabase()
+        worker = await get_worker_by_phone(phone)
+        if not worker:
+            return "❌ Not registered. Reply with JOIN."
+
+        # Update status in Redis
+        from utils.redis_client import get_redis
+        rc = await get_redis()
+        await rc.set(f"shift_status:{phone}", "on", ex=86400) # 24h expiry
+        
+        # Also update last_seen_at and is_on_shift in DB if column exists
+        now = datetime.now()
+        update_data = {"last_seen_at": now.isoformat(), "is_on_shift": True}
+        try:
+            sb.table("workers").update(update_data).eq("phone_number", phone).execute()
+        except:
+            # Fallback for older schemas
+            sb.table("workers").update({"last_seen_at": now.isoformat()}).eq("phone_number", phone).execute()
+
+        # Generate login prompt as requested (ss message)
+        share_url = get_or_create_worker_share_url(worker["id"], "WhatsApp START shift login")
+        return format_session_login_prompt(share_url)
+
+    except Exception as e:
+        logger.error(f"Error in START for {phone}: {e}")
+        return "⚠️ Error starting shift. Please try again."
+
+
+async def handle_stop(phone: str, message: str) -> str:
+    """
+    STOP command — Mark shift as ended
+    """
+    try:
+        sb = get_supabase()
+        worker = await get_worker_by_phone(phone)
+        if not worker:
+            return "❌ Not registered. Reply with JOIN."
+
+        # Update status in Redis
+        from utils.redis_client import get_redis
+        rc = await get_redis()
+        await rc.delete(f"shift_status:{phone}")
+
+        # Update DB if column exists
+        try:
+            sb.table("workers").update({"is_on_shift": False}).eq("phone_number", phone).execute()
+        except: pass
+
+        lang = worker.get("language", "en")
+        from .whatsapp_service import MESSAGES
+        return MESSAGES["shift_ended"].get(lang, MESSAGES["shift_ended"]["en"])
+
+    except Exception as e:
+        logger.error(f"Error in STOP for {phone}: {e}")
+        return "⚠️ Error stopping shift. Please try again."
+
+
+async def handle_status(phone: str, body: str) -> str:
     """
     STATUS command — Show worker's current coverage and zone DCI
     """
     try:
         sb = get_supabase()
+<<<<<<< HEAD
 
         worker = await get_worker_by_phone(phone)
         if not worker:
+=======
+        
+        # Get worker
+        worker_response = sb.table("workers").select("*").eq("phone_number", phone).execute()
+        if not worker_response.data:
+>>>>>>> 10baad6 (WhatsApp and PWA Dashboard)
             return "❌ Not registered yet. Reply with JOIN to start."
 
         lang = worker.get("language", "en")
@@ -541,12 +668,21 @@ async def handle_status(phone: str, message: str) -> str:
             dci_score = 0
             severity = "unknown"
 
+<<<<<<< HEAD
+=======
+        # Check real-time shift status in Redis
+        from utils.redis_client import get_redis
+        rc = await get_redis()
+        is_on_shift = await rc.get(f"shift_status:{phone}")
+        shift_icon = "🟢 ACTIVE (" if is_on_shift == "on" else "🔴 OFF ("
+        shift_label = f"{shift_icon}{worker.get('shift', 'N/A').title()})"
+>>>>>>> 10baad6 (WhatsApp and PWA Dashboard)
         return MESSAGES["status_response"][lang].format(
             pin_code=pin_code,
             dci=dci_score,
             severity=severity,
             plan=f"Shield {'Basic' if plan == 'basic' else 'Plus' if plan == 'plus' else 'Pro'}",
-            shift=worker.get("shift", "N/A").title()
+            shift=shift_label
         )
 
         
@@ -561,9 +697,15 @@ async def handle_renew(phone: str, message: str) -> str:
     """
     try:
         sb = get_supabase()
+<<<<<<< HEAD
 
         worker = await get_worker_by_phone(phone)
         if not worker:
+=======
+        
+        worker_response = sb.table("workers").select("*").eq("phone_number", phone).execute()
+        if not worker_response.data:
+>>>>>>> 10baad6 (WhatsApp and PWA Dashboard)
             return "❌ Not registered. Reply with JOIN."
 
         lang = worker.get("language", "en")
@@ -607,9 +749,15 @@ async def handle_shift_update(phone: str, message: str) -> str:
     """
     try:
         sb = get_supabase()
+<<<<<<< HEAD
 
         worker = await get_worker_by_phone(phone)
         if not worker:
+=======
+        
+        worker_response = sb.table("workers").select("*").eq("phone_number", phone).execute()
+        if not worker_response.data:
+>>>>>>> 10baad6 (WhatsApp and PWA Dashboard)
             return "❌ Not registered. Reply with JOIN."
 
         lang = worker.get("language", "en")
@@ -647,9 +795,15 @@ async def handle_language_change(phone: str, message: str) -> str:
     """
     try:
         sb = get_supabase()
+<<<<<<< HEAD
 
         worker = await get_worker_by_phone(phone)
         if not worker:
+=======
+        
+        worker_response = sb.table("workers").select("*").eq("phone_number", phone).execute()
+        if not worker_response.data:
+>>>>>>> 10baad6 (WhatsApp and PWA Dashboard)
             return "❌ Not registered. Reply with JOIN."
         
         # Parse language choice
@@ -684,10 +838,39 @@ async def handle_help(phone: str, message: str) -> str:
     HELP command — Show all available commands
     """
     try:
+<<<<<<< HEAD
         worker = await get_worker_by_phone(phone)
         lang = worker.get("language", "en") if worker else "en"
+=======
+        sb = get_supabase()
         
-        return MESSAGES["help"][lang]
+        worker_response = sb.table("workers").select("language").eq("phone_number", phone).execute()
+        lang = worker_response.data[0].get("language", "en") if worker_response.data else "en"
+>>>>>>> 10baad6 (WhatsApp and PWA Dashboard)
+        
+        msgs = {
+            "en": (
+                "🤖 *GigKavach Bot Commands*\n\n"
+                "• *JOIN* - Start onboarding\n"
+                "• *START* - Start your shift (Eligibility ON)\n"
+                "• *STOP* - End your shift (Eligibility OFF)\n"
+                "• *PROFILE* - Get your PWA link\n"
+                "• *STATUS* - Check current protection status\n"
+                "• *RENEW* - Renew your weekly policy\n"
+                "• *HISTORY* - View your payout history\n"
+                "• *HELP* - Show this menu"
+            ),
+            "hi": (
+                "🤖 *GigKavach कमांड*\n\n"
+                "• *JOIN* - पंजीकरण शुरू करें\n"
+                "• *START* - अपनी शिफ्ट शुरू करें\n"
+                "• *STOP* - अपनी शिफ्ट खत्म करें\n"
+                "• *PROFILE* - अपनी प्रोफाइल देखें\n"
+                "• *STATUS* - अपनी स्थिति जांचें\n"
+                "• *HELP* - मदद के लिए"
+            )
+        }
+        return msgs.get(lang, msgs["en"])
         
     except Exception as e:
         logger.error(f"Error in HELP for {phone}: {e}")
@@ -701,9 +884,15 @@ async def handle_appeal(phone: str, message: str) -> str:
     """
     try:
         sb = get_supabase()
+<<<<<<< HEAD
 
         worker = await get_worker_by_phone(phone)
         if not worker:
+=======
+        
+        worker_response = sb.table("workers").select("*").eq("phone_number", phone).execute()
+        if not worker_response.data:
+>>>>>>> 10baad6 (WhatsApp and PWA Dashboard)
             return "❌ Not registered. Reply with JOIN."
 
         lang = worker.get("language", "en")
@@ -798,6 +987,7 @@ async def route_message(phone: str, body: str) -> str:
     Main router — dispatch to appropriate handler based on message content and current step
     """
     keyword = body.strip().upper().split()[0] if body.strip() else ""
+<<<<<<< HEAD
 
     # If worker is already registered, require a PWA login link at the start of each session.
     worker = await get_worker_by_phone(phone)
@@ -810,9 +1000,17 @@ async def route_message(phone: str, body: str) -> str:
         if not session_active:
             share_url = get_or_create_worker_share_url(worker["id"], "WhatsApp auto session login")
             return format_session_login_prompt(share_url)
+=======
+    # If worker is already registered, require a PWA login link at the start of each session.
+    worker = await get_worker_by_phone(phone)
+>>>>>>> 10baad6 (WhatsApp and PWA Dashboard)
     
-    # Commands that work anytime for registered users
-    if keyword == "STATUS":
+    # Global commands
+    if keyword == "START":
+        return await handle_start(phone, body)
+    elif keyword == "STOP":
+        return await handle_stop(phone, body)
+    elif keyword == "STATUS":
         return await handle_status(phone, body)
     elif keyword == "RENEW":
         return await handle_renew(phone, body)
@@ -835,7 +1033,6 @@ async def route_message(phone: str, body: str) -> str:
     state = await get_onboarding_state(phone)
     if state:
         step = state.get("step", 0)
-        
         if step == 0:
             return await handle_language_selection(phone, body, state)
         elif step == 1:
@@ -856,5 +1053,5 @@ async def route_message(phone: str, body: str) -> str:
             return await handle_plan_selection(phone, body, state)
     
     # Default — ask for valid command
-    return MESSAGES["help"]["en"]
+    return f"👋 Welcome to GigKavach! {MESSAGES['help']['en']}" if not worker else MESSAGES["unknown_command"]["en"]
 

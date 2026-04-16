@@ -123,6 +123,7 @@ class WorkerResponse(BaseModel):
     language: Language
     gig_score: float = Field(default=100.0, description="Trust score (0-100), starts at 100")
     is_active: bool = True
+    is_on_shift: bool = False
     created_at: datetime
     coverage_active_from: Optional[datetime] = Field(
         None,

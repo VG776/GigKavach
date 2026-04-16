@@ -53,6 +53,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "te": "మీరు సాధారణంగా ఏ సమయానికి పని చేస్తారు?\n1️⃣ ఉదయం (6AM–2PM)\n2️⃣ పగలు (9AM–9PM)\n3️⃣ రాత్రి (6PM–2AM)\n4️⃣ ఎప్పుడైనా",
     },
 
+    "ask_verification": {
+        "en": "To protect against fraud, please share your Aadhaar or DL number for identity verification via DigiLocker:",
+        "kn": "ವಂಚನೆ ತಡೆಯಲು, ಡಿಜಿಲಾಕರ್ ಮೂಲಕ ಗುರುತಿನ ಪರಿಶೀಲನೆಗಾಗಿ ನಿಮ್ಮ ಆಧಾರ್ ಅಥವಾ DL ಸಂಖ್ಯೆಯನ್ನು ಹಂಚಿಕೊಳ್ಳಿ:",
+        "hi": "धोखाधड़ी से बचने के लिए, डिजिलॉकर के माध्यम से पहचान सत्यापन के लिए अपना आधार या डीएल नंबर साझा करें:",
+        "ta": "மோசடிக்கு எதிராகப் பாதுகாக்க, டிஜிலாக்கர் மூலம் அடையாளத்தைச் சரிபார்க்க உங்கள் ஆதார் அல்லது டிஎல் எண்ணைப் பகிரவும்:",
+        "te": "మోసాల నుండి రక్షణ కోసం, డిజీలాకర్ ద్వారా గుర్తింపు ధృవీకరణ కోసం మీ ఆధార్ లేదా డిఎల్ నంబర్‌ను షేర్ చేయండి:",
+    },
+
     "ask_upi": {
         "en": "Please share your UPI ID for payouts (e.g. ravi@upi):",
         "kn": "ಪಾವತಿಗಾಗಿ ನಿಮ್ಮ UPI ID ಹಂಚಿಕೊಳ್ಳಿ (ಉದಾ: ravi@upi):",
@@ -156,11 +164,59 @@ MESSAGES: dict[str, dict[str, str]] = {
 
     # HELP command
     "help": {
-        "en": "GigKavach Commands:\n• STATUS — Zone DCI & coverage\n• RENEW — Renew for next week\n• SHIFT — Update working hours\n• LANG — Change language\n• APPEAL — Contest a decision\n• HELP — Show this menu",
-        "kn": "GigKavach ಆಜ್ಞೆಗಳು:\n• STATUS — ಝೋನ್ DCI & ಕವರೇಜ್\n• RENEW — ಮುಂದಿನ ವಾರ ನವೀಕರಿಸಿ\n• SHIFT — ಕೆಲಸದ ಸಮಯ ನವೀಕರಿಸಿ\n• LANG — ಭಾಷೆ ಬದಲಿಸಿ\n• APPEAL — ನಿರ್ಧಾರವನ್ನು ಆಕ್ಷೇಪಿಸಿ",
-        "hi": "GigKavach कमांड:\n• STATUS — जोन DCI और कवरेज\n• RENEW — अगले हफ्ते नवीनीकरण\n• SHIFT — काम का समय बदलें\n• LANG — भाषा बदलें\n• APPEAL — फैसले को चुनौती दें",
-        "ta": "GigKavach கட்டளைகள்:\n• STATUS — மண்டல DCI & அட்டை\n• RENEW — அடுத்த வாரம் புதுப்பிக்க\n• SHIFT — வேலை நேரம் புதுப்பிக்க\n• LANG — மொழி மாற்று\n• APPEAL — முடிவை சவால் செய்",
-        "te": "GigKavach కమాండ్లు:\n• STATUS — జోన్ DCI & కవరేజ్\n• RENEW — వచ్చే వారం రెన్యూ\n• SHIFT — పని సమయం అప్డేట్\n• LANG — భాష మార్చు\n• APPEAL — నిర్ణయాన్ని సవాల్ చేయి",
+        "en": "GigKavach Commands:\n• JOIN — Start registration\n• STATUS — Zone DCI & coverage\n• RENEW — Renew for next week\n• SHIFT — Update working hours\n• LANG — Change language\n• APPEAL — Contest a decision\n• HELP — Show this menu",
+        "kn": "GigKavach ಆಜ್ಞೆಗಳು:\n• JOIN — ನೋಂದಣಿ ಆರಂಭಿಸಿ\n• STATUS — ಝೋನ್ DCI & ಕವರೇಜ್\n• RENEW — ಮುಂದಿನ ವಾರ ನವೀಕರಿಸಿ\n• SHIFT — ಕೆಲಸದ ಸಮಯ ನವೀಕರಿಸಿ\n• LANG — ಭಾಷೆ ಬದಲಿಸಿ\n• APPEAL — ನಿರ್ಧಾರವನ್ನು ಆಕ್ಷೇಪಿಸಿ",
+        "hi": "GigKavach कमांड:\n• JOIN — पंजीकरण शुरू करें\n• STATUS — जोन DCI और कवरेज\n• RENEW — अगले हफ्ते नवीनीकरण\n• SHIFT — काम का समय बदलें\n• LANG — भाषा बदलें\n• APPEAL — फैसले को चुनौती दें",
+        "ta": "GigKavach கட்டளைகள்:\n• JOIN — பதிவு செய்ய\n• STATUS — மண்டல DCI & அட்டை\n• RENEW — அடுத்த வாரம் புதுப்பிக்க\n• SHIFT — வேலை நேரம் புதுப்பிக்க\n• LANG — மொழி மாற்று\n• APPEAL — முடிவை சவால் செய்",
+        "te": "GigKavach కమాండ్లు:\n• JOIN — నమోదు ప్రారంభించండి\n• STATUS — జోన్ DCI & కవరేజ్\n• RENEW — వచ్చే వారం రెన్యూ\n• SHIFT — పని సమయం అప్డేట్\n• LANG — భాష మార్చు\n• APPEAL — నిర్ణయాన్ని సవాల్ చేయి",
+    },
+    
+    "ask_gig_score": {
+        "en": "What's your typical gig economy rating?\nExamples: 4.8/5, 4.5, or 90",
+        "kn": "ನಿಮ್ಮ ಗಿಗ್ ಎಕಾನಮಿ ರೇಟಿಂಗ್ ಏನು?\nಉದಾಹರಣೆ: 4.8/5, 4.5, ಅಥವಾ 90",
+        "hi": "आपकी विशिष्ट गिग इकोनॉमी रेटिंग क्या है?\nउदाहरण: 4.8/5, 4.5, या 90",
+        "ta": "உங்கள் வழக்கமான கிக் பொருளாதார மதிப்பீடு என்ன?\nஉதாரணங்கள்: 4.8/5, 4.5, அல்லது 90",
+        "te": "మీ సాధారణ గిగ్ ఎకానమీ రేటింగ్ ఏమిటి?\nఉదాహరణలు: 4.8/5, 4.5, లేదా 90",
+    },
+
+    "ask_deliveries": {
+        "en": "How many deliveries have you completed so far?\nIf you're new, reply 0.",
+        "kn": "ನೀವು ಇದುವರೆಗೆ ಎಷ್ಟು ಡೆಲಿವರಿ ಮಾಡಿದ್ದೀರಿ?\nಹೊಸಬರಾಗಿದ್ದರೆ, 0 ಎಂದು ಉತ್ತರಿಸಿ.",
+        "hi": "आपने अब तक कितनी डिलीवरी पूरी की हैं?\nयदि आप नए हैं, तो 0 उत्तर दें।",
+        "ta": "இதுவரை எத்தனை டெலிவரிகளை முடித்துள்ளீர்கள்?\nநீங்கள் புதியவர் என்றால், 0 எனப் பதிலளிக்கவும்.",
+        "te": "మీరు ఇప్పటి వరకు ఎన్ని డెలివరీలను పూర్తి చేశారు?\nమీరు కొత్త వారైతే, 0 అని సమాధానం ఇవ్వండి.",
+    },
+
+    "portfolio_confirmation": {
+        "en": "👍 Portfolio score set to {score}/100 based on your history.",
+        "kn": "👍 ನಿಮ್ಮ ಇತಿಹಾಸದ ಆಧಾರದ ಮೇಲೆ ಪೋರ್ಟ್‌ಫೋಲಿಯೋ ಸ್ಕೋರ್ {score}/100 ಕ್ಕೆ ಸೆಟ್ ಮಾಡಲಾಗಿದೆ.",
+        "hi": "👍 आपके इतिहास के आधार पर पोर्टफोलियो स्कोर {score}/100 सेट किया गया है।",
+        "ta": "👍 உங்கள் வரலாற்றின் அடிப்படையில் போர்ட்ஃபோலியோ மதிப்பெண் {score}/100 ஆக அமைக்கப்பட்டது.",
+        "te": "👍 మీ చరిత్ర ఆధారంగా పోర్ట్‌ఫోలియో స్కోర్ {score}/100 గా సెట్ చేయబడింది.",
+    },
+
+    "unknown_command": {
+        "en": "⚠️ I didn't understand that. Type HELP for a list of valid commands.",
+        "kn": "⚠️ ನನಗೆ ಅರ್ಥವಾಗಲಿಲ್ಲ. ಚಾಲ್ತಿಯಲ್ಲಿರುವ ಆಜ್ಞೆಗಳಿಗಾಗಿ HELP ಎಂದು ಟೈಪ್ ಮಾಡಿ.",
+        "hi": "⚠️ मुझे यह समझ नहीं आया। मान्य कमांड की सूची के लिए HELP टाइप करें.",
+        "ta": "⚠️ எனக்கு அது புரியவில்லை. சரியான கட்டளைகளின் பட்டியலுக்கு HELP எனத் தட்டச்சு செய்யவும்.",
+        "te": "⚠️ నాకు అది అర్థం కాలేదు. సరైన కమాండ్‌ల కోసం HELP అని టైప్ చేయండి.",
+    },
+    
+    "recommended_for_you": {
+        "en": "🤖 Recommended for you: {plan}",
+        "kn": "🤖 ನಿಮಗಾಗಿ ಶಿಫಾರಸು ಮಾಡಲಾಗಿದೆ: {plan}",
+        "hi": "🤖 आपके लिए अनुशंसित: {plan}",
+        "ta": "🤖 உங்களுக்காக பரிந்துரைக்கப்படுகிறது: {plan}",
+        "te": "🤖 మీ కోసం సిఫార్సు చేయబడింది: {plan}",
+    },
+
+    "shift_ended": {
+        "en": "🛑 Shift ended. You have been clocked out. Stay safe!",
+        "kn": "🛑 ಪಾಳಿ ಮುಕ್ತಾಯವಾಗಿದೆ. ಸುರಕ್ಷಿತವಾಗಿರಿ!",
+        "hi": "🛑 शिफ्ट समाप्त हो गई है। सुरक्षित रहें!",
+        "ta": "🛑 ஷிப்ட் முடிந்தது. பாதுகாப்பாக இருங்கள்!",
+        "te": "🛑 షిఫ్ట్ పూర్తయింది. జాగ్రత్తగా ఉండండి!",
     },
 }
 

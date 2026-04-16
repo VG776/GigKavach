@@ -252,7 +252,9 @@ app.include_router(auth_router, prefix="/api/v1")           # Authentication rou
 app.include_router(workers_router, prefix="/api/v1")        # POST /api/v1/register
 app.include_router(policies_router, prefix="/api/v1")       # GET + PATCH /api/v1/policy/{id}
 app.include_router(dci_router, prefix="/api/v1")            # Varshit — DCI engine
-app.include_router(whatsapp_router, prefix="/api/v1")       # Standardized prefix
+app.include_router(whatsapp_router, prefix="/api/v1/whatsapp")
+from api.share_tokens import router as share_tokens_router
+app.include_router(share_tokens_router, prefix="/api/v1")
 app.include_router(whatsapp_integration_router, prefix="/api/v1")  # Bot service integration
 app.include_router(payouts_router, prefix="/api/v1")        # Consolidated prefix
 app.include_router(fraud_router, prefix="/api/v1")          # Vijeth — fraud assessment
