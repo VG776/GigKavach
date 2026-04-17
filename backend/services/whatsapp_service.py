@@ -42,11 +42,19 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
 
     "ask_shift": {
-        "en": "What are your typical working hours?\n1️⃣ Morning (6AM–2PM)\n2️⃣ Day (9AM–9PM)\n3️⃣ Night (6PM–2AM)\n4️⃣ Flexible",
+        "en": "What are your typical working hours?\n1️⃣ Morning (6AM-2PM)\n2️⃣ Evening (2PM-10PM)\n3️⃣ Night (10PM-6AM)\n4️⃣ Flexible",
         "kn": "ನಿಮ್ಮ ಸಾಮಾನ್ಯ ಕೆಲಸದ ಸಮಯ ಯಾವುದು?\n1️⃣ ಬೆಳಿಗ್ಗೆ (6AM–2PM)\n2️⃣ ಹಗಲು (9AM–9PM)\n3️⃣ ರಾತ್ರಿ (6PM–2AM)\n4️⃣ ಯಾವುದಾದರೂ ಸಮಯ",
         "hi": "आप आमतौर पर किस समय काम करते हैं?\n1️⃣ सुबह (6AM–2PM)\n2️⃣ दिन (9AM–9PM)\n3️⃣ रात (6PM–2AM)\n4️⃣ कभी भी",
         "ta": "உங்கள் வேலை நேரம் என்ன?\n1️⃣ காலை (6AM–2PM)\n2️⃣ பகல் (9AM–9PM)\n3️⃣ இரவு (6PM–2AM)\n4️⃣ நெகிழ்வான",
         "te": "మీరు సాధారణంగా ఏ సమయానికి పని చేస్తారు?\n1️⃣ ఉదయం (6AM–2PM)\n2️⃣ పగలు (9AM–9PM)\n3️⃣ రాత్రి (6PM–2AM)\n4️⃣ ఎప్పుడైనా",
+    },
+
+    "ask_verification": {
+        "en": "To protect against fraud, please share your Aadhaar or DL number for identity verification via DigiLocker:",
+        "kn": "ವಂಚನೆ ತಡೆಯಲು, ಡಿಜಿಲಾಕರ್ ಮೂಲಕ ಗುರುತಿನ ಪರಿಶೀಲನೆಗಾಗಿ ನಿಮ್ಮ ಆಧಾರ್ ಅಥವಾ DL ಸಂಖ್ಯೆಯನ್ನು ಹಂಚಿಕೊಳ್ಳಿ:",
+        "hi": "धोखाधड़ी से बचने के लिए, डिजिलॉकर के माध्यम से पहचान सत्यापन के लिए अपना आधार या डीएल नंबर साझा करें:",
+        "ta": "மோசடிக்கு எதிராகப் பாதுகாக்க, டிஜிலாக்கர் மூலம் அடையாளத்தைச் சரிபார்க்க உங்கள் ஆதார் அல்லது டிஎல் எண்ணைப் பகிரவும்:",
+        "te": "మోసాల నుండి రక్షణ కోసం, డిజీలాకర్ ద్వారా గుర్తింపు ధృవీకరణ కోసం మీ ఆధార్ లేదా డిఎల్ నంబర్‌ను షేర్ చేయండి:",
     },
 
     "ask_upi": {

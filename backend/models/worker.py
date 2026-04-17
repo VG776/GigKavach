@@ -93,6 +93,7 @@ class WorkerResponse(BaseModel):
     language: Language
     gig_score: float = 100.0
     is_active: bool = True
+    is_on_shift: bool = False
     created_at: datetime
     coverage_active_from: Optional[datetime] = None
 

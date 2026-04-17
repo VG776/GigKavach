@@ -7,15 +7,20 @@ to the onboarding state machine.
 """
 
 import logging
-from fastapi import APIRouter, Request, BackgroundTasks
+from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import Optional
 
 from services.onboarding_handlers import route_message
-from services.whatsapp_service import send_whatsapp_message
 
 router = APIRouter(tags=["WhatsApp Integration"])
 logger = logging.getLogger("gigkavach.whatsapp")
+
+
+def normalize_whatsapp_phone(phone: str) -> str:
+    """Normalize phone value to digits-only E.164 style without '+' for stable identity mapping."""
+    digits = "".join(ch for ch in (phone or "") if ch.isdigit())
+    return digits
 
 class WhatsAppWebhookRequest(BaseModel):
     phone: str
@@ -25,14 +30,13 @@ class WhatsAppWebhookRequest(BaseModel):
 
 @router.post("/whatsapp/webhook")
 async def whatsapp_inbound_webhook(
-    req: WhatsAppWebhookRequest,
-    background_tasks: BackgroundTasks
+    req: WhatsAppWebhookRequest
 ):
     """
     Main webhook receiver for the WhatsApp bot.
     Bots on 3001 should send callbacks here.
     """
-    phone = req.phone
+    phone = normalize_whatsapp_phone(req.phone)
     message_body = req.body
     
     logger.info(f"📩 [INBOUND] Message from {phone}: {message_body}")
@@ -41,13 +45,13 @@ async def whatsapp_inbound_webhook(
     try:
         response_text = await route_message(phone, message_body)
         
-        # 2. Send the calculated response back to the worker
-        # We do this in a background task to respond to the bot's webhook immediately (200 OK)
-        if response_text:
-            background_tasks.add_task(send_whatsapp_message, phone, response_text)
-            logger.debug(f"📤 [OUTBOUND RESP] Queued response for {phone}")
-            
-        return {"status": "ok", "delivered": True}
+        # Return response text to the bot so it can reply directly on the same connection.
+        # This avoids failures when backend cannot call back to the bot service URL.
+        return {
+            "status": "ok",
+            "reply": response_text or "",
+            "delivered": bool(response_text),
+        }
         
     except Exception as e:
         logger.error(f"❌ Error in WhatsApp webhook processing: {e}")
