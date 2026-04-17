@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from threading import Lock
 
 _store: dict[str, tuple[datetime, object]] = {}
@@ -10,7 +10,7 @@ _lock = Lock()
 
 
 def _set(key: str, value: object, ttl_seconds: int = 60) -> None:
-    expires_at = datetime.utcnow() + timedelta(seconds=max(1, ttl_seconds))
+    expires_at = datetime.now(timezone.utc) + timedelta(seconds=max(1, ttl_seconds))
     with _lock:
         _store[key] = (expires_at, value)
 
@@ -21,7 +21,7 @@ def _get(key: str) -> object | None:
         if not entry:
             return None
         expires_at, value = entry
-        if datetime.utcnow() >= expires_at:
+        if datetime.now(timezone.utc) >= expires_at:
             _store.pop(key, None)
             return None
         return value

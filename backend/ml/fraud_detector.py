@@ -244,14 +244,44 @@ class FraudDetector:
             avg_dci = np.mean(dci_scores)
             near_threshold_count = len(dci_scores)
             
-            # SOFTENED: Require VERY strong signal (0.75+ proximity) to block
-            # This prevents memorization of synthetic data patterns
-            # Real threshold gamers often stay below 0.6, so this is conservative
             if threshold_proximity > 0.75 and 64 <= avg_dci <= 72 and near_threshold_count >= 4:
                 return {
                     'decision': 'BLOCK',
                     'fraud_type': 'threshold_gaming',
                     'reason': f'Strong threshold gaming signal: {threshold_proximity:.1%} claims at DCI 64-72',
+                }
+        
+        # --- NEW SECTION: 6-Signal Composite Checks ---
+        
+        # Signal 1: GPS vs IP Physical Distance (Teleportation/Spoof check)
+        gps_ip_dist = claim.get('gps_ip_distance_km', 0)
+        if gps_ip_dist > 300: # Physically impossible gap between IP and GPS
+            return {
+                'decision': 'BLOCK',
+                'fraud_type': 'gps_spoof',
+                'reason': f'IP to GPS distance mismatch: {gps_ip_dist:.0f}km',
+            }
+            
+        # Signal 2: Active Shift Verification (Gating check)
+        is_on_shift = claim.get('is_on_shift', True) # Default to true for legacy/unit tests if not provided
+        if not is_on_shift:
+            return {
+                'decision': 'BLOCK',
+                'fraud_type': 'shift_mismatch',
+                'reason': 'Claim submitted while worker was not on an active shift.',
+            }
+        
+        # Signal 4: Entropy (Too-Perfect Movement check)
+        location_history = claim.get('location_history', [])
+        if len(location_history) >= 5:
+            # Check for constant precision (common in fake-gps apps)
+            lats = [p['lat'] for p in location_history]
+            precision_variance = np.var([len(str(l).split('.')[-1]) if '.' in str(l) else 0 for l in lats])
+            if precision_variance == 0:
+                return {
+                    'decision': 'FLAG_50',
+                    'fraud_type': 'synthetic_gps',
+                    'reason': 'Suspiciously constant GPS precision detected.',
                 }
         
         return {

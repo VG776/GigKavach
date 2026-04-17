@@ -39,6 +39,7 @@ from api.premium import router as premium_router
 from api.share_tokens import router as share_tokens_router
 from api.webhooks import router as webhooks_router
 from api.analytics import router as analytics_router
+from api.telemetry import router as telemetry_router
 
 
 # ─── Logging Setup ────────────────────────────────────────────────────────────
@@ -253,7 +254,9 @@ app.include_router(auth_router, prefix="/api/v1")           # Authentication rou
 app.include_router(workers_router, prefix="/api/v1")        # POST /api/v1/register
 app.include_router(policies_router, prefix="/api/v1")       # GET + PATCH /api/v1/policy/{id}
 app.include_router(dci_router, prefix="/api/v1")            # Varshit — DCI engine
-app.include_router(whatsapp_router, prefix="/api/v1")       # Standardized prefix
+app.include_router(whatsapp_router, prefix="/api/v1/whatsapp")
+from api.share_tokens import router as share_tokens_router
+app.include_router(share_tokens_router, prefix="/api/v1")
 app.include_router(whatsapp_integration_router, prefix="/api/v1")  # Bot service integration
 app.include_router(payouts_router, prefix="/api/v1")        # Consolidated prefix
 app.include_router(fraud_router, prefix="/api/v1")          # Vijeth — fraud assessment
@@ -261,6 +264,7 @@ app.include_router(premium_router, prefix="/api/v1")        # Dynamic Premium Mo
 app.include_router(share_tokens_router, prefix="/api/v1")   # Share tokens for PWA links
 app.include_router(webhooks_router, prefix="/api/v1")       # Razorpay Payout Webhooks
 app.include_router(analytics_router, prefix="/api/v1")      # Analytics & Dashboard
+app.include_router(telemetry_router, prefix="/api/v1")      # Behavioral Telemetry Ingestion
 # Dashboard & Monitoring (Standardized to /api/v1)
 
 

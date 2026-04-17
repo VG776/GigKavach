@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 # Add the backend directory to sys.path so tests can import main, api, services, etc.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-@pytest.fixture(autouse=True)
+@pytest.fixture
 def mock_supabase_for_whatsapp(monkeypatch):
     mock_sb = MagicMock()
     # By default, pretend no user exists (data=[]) so we can test "not registered" 

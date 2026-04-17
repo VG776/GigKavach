@@ -36,7 +36,7 @@ class MockSupabaseTable:
             return type('obj', (object,), {
                 'data': [{
                     'id': 'pol_123',
-                    'worker_id': 'W123',
+                    'worker_id': 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
                     'plan': 'plus',
                     'status': 'active',
                     'week_start': (datetime.now() - timedelta(days=5)).isoformat(),
@@ -45,10 +45,10 @@ class MockSupabaseTable:
                 }]
             })()
         
-        if ("id", "W123") in self.query_filters:
+        if ("id", "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11") in self.query_filters:
             return type('obj', (object,), {
                 'data': [{
-                    'id': 'W123',
+                    'id': 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
                     'phone': '+919876543210',
                     'platform': 'zomato',
                     'shift': 'morning',
@@ -101,7 +101,7 @@ def test_payout_calculation():
         baseline_earnings=500.0,
         disruption_duration=120,  # 2 hours
         dci_score=78.5,
-        worker_id='W123',
+        worker_id='a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
         city='Chennai',
         zone_density='High',
         shift='Morning',
@@ -135,9 +135,9 @@ def test_fraud_detection_stage_1():
     
     claim = {
         'claim_id': 'CLM_001',
-        'worker_id': 'W123',
+        'worker_id': 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
         'dci_score': 45,
-        'device_id': 'device_123',
+        'device_id': 'device_1234567890',
     }
     
     result = check_fraud(claim)
@@ -150,7 +150,7 @@ def test_fraud_detection_stage_2():
     
     claim = {
         'claim_id': 'CLM_002',
-        'worker_id': 'W124',
+        'worker_id': 'b1ffcd22-5d4c-482a-a567-c0e2b2c3d479',
         'dci_score': 89.5,
         'gps_coordinates': [13.0827, 80.2707],
     }

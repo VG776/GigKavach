@@ -23,6 +23,13 @@ import StatusShare from './pages/link/StatusShare';
 import HistoryShare from './pages/link/HistoryShare';
 import SharedWorkerProfile from './pages/SharedWorkerProfile';
 
+// Worker PWA Components
+import WorkerLayout from './pages/worker-pwa/Layout';
+import Status from './pages/worker-pwa/Status';
+import History from './pages/worker-pwa/History';
+import Profile from './pages/worker-pwa/Profile';
+import WorkerLogin from './pages/worker-pwa/Login';
+
 // Protected Layout wrapper
 const ProtectedLayout = ({ children }) => {
   return (
@@ -142,6 +149,8 @@ export default function App() {
     <Routes>
       {/* Public Routes */}
       <Route path="/login" element={<Login />} />
+      <Route path="/worker/login" element={<WorkerLogin />} />
+      <Route path="/share/worker/:token" element={<WorkerLogin />} />
       
       {/* Shared Worker Profile (via share token) */}
       <Route path="/share/worker/:token" element={<SharedWorkerProfile />} />
