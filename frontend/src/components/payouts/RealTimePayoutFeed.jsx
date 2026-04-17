@@ -126,7 +126,7 @@ export function RealTimePayoutFeed({ pollMs = DEFAULT_POLL_MS, limit = DEFAULT_L
               Live
             </span>
           </h2>
-          <p className="text-xs text-gray-600 dark:text-gray-400 mt-1.5">Polling every {Math.round(pollMs / 1000)}s · Latest {limit}</p>
+          <p className="text-xs text-gray-600 dark:text-gray-400 mt-1.5">Polling every 20s</p>
         </div>
       </div>
 

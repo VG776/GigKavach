@@ -20,6 +20,7 @@ class GigScoreEvent(Enum):
     FRAUD_TIER_3 = "fraud_tier_3_blacklist" # Confirmed spoofing syndicate
     ZONE_HOPPING = "zone_hopping"           # Claiming outside registered zones
     THRESHOLD_GAMING = "threshold_gaming"   # Barely triggering DCI repeatedly
+    CLEAN_SHIFT = "clean_shift_completed"   # No fraud flags during active shift
 
     # Positive Reinforcement & Loyalty (Positive)
     CLEAN_RENEWAL = "clean_week_renewal"    # Completed week without fraud flags
@@ -34,6 +35,7 @@ def get_event_impact(event_type: GigScoreEvent) -> float:
         GigScoreEvent.FRAUD_TIER_3: -100.0,  # Blacklist (Drops to 0)
         GigScoreEvent.ZONE_HOPPING: -2.0,    # Minor behavioral inconsistency
         GigScoreEvent.THRESHOLD_GAMING: -3.0,# Minor gaming penalty
+        GigScoreEvent.CLEAN_SHIFT: 0.5,      # Micro-boost for consistent honesty
         GigScoreEvent.CLEAN_RENEWAL: 2.0,    # Slow trust rebuild
         GigScoreEvent.VALID_SEVERE_CLAIM: 5.0, # Validates reliability
         GigScoreEvent.SUCCESSFUL_APPEAL: 15.0, # Complete restoration + bonus (context dependent)
@@ -50,19 +52,21 @@ def update_gig_score(worker_id: str, event_type: GigScoreEvent, metadata: Dict[s
     
     # 1. Fetch current score
     try:
-        result = sb.table("workers").select("gig_score, account_status").eq("id", worker_id).execute()
+        # Use * for resilience, handles missing columns gracefully in dictionary access
+        result = sb.table("workers").select("*").eq("id", worker_id).execute()
         if not result.data:
             logger.error(f"Cannot update GigScore: Worker {worker_id} not found.")
-            return -1.0 # Or raise Exception
+            return -1.0
             
         worker = result.data[0]
+        # Safeguard: use .get() for columns that might be missing
         current_score = float(worker.get("gig_score", 100.0))
         account_status = worker.get("account_status", "active")
-        
     except Exception as e:
         logger.error(f"Failed to fetch worker {worker_id} from Supabase: {str(e)}")
-        return -1.0
-        
+        current_score = 100.0
+        account_status = "active"
+        worker = {}
     # 2. Event Matcher & Delta application
     delta = get_event_impact(event_type)
     
@@ -99,22 +103,30 @@ def update_gig_score(worker_id: str, event_type: GigScoreEvent, metadata: Dict[s
         
     # 4. Database Write
     update_payload = {
-        "gig_score": new_score,
         "account_status": new_status
     }
+    # Only add gig_score if we think it exists (safeguard)
+    if "gig_score" in worker:
+        update_payload["gig_score"] = new_score
     
     try:
-        # Perform update
         sb.table("workers").update(update_payload).eq("id", worker_id).execute()
         
-        # Log to application insights (this acts as our audit log since we don't have gigscore_history table modeled)
         logger.info(
             f"GIGSCORE UPDATE | Worker: {worker_id} | Event: {event_type.value} | "
             f"Delta: {delta:+.1f} | New Score: {new_score:.1f}"
         )
-        
         return new_score
         
     except Exception as e:
-        logger.error(f"Failed to write updated GigScore for {worker_id}: {str(e)}")
+        error_msg = str(e)
+        if "gig_score" in update_payload and "does not exist" in error_msg:
+             # Retry without gig_score if it failed due to missing column
+             del update_payload["gig_score"]
+             try:
+                 sb.table("workers").update(update_payload).eq("id", worker_id).execute()
+                 return new_score
+             except: pass
+        
+        logger.error(f"Failed to write updated GigScore for {worker_id}: {error_msg}")
         return current_score

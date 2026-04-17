@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { X, AlertTriangle, Shield, TrendingDown, MapPin, Eye, MessageSquare, Ban } from 'lucide-react';
 import { formatCurrency, getInitials } from '../utils/formatters';
+import { fraudAPI } from '../api/fraud';
 
 const signalLabels = ['GPS', 'IP', 'Velocity', 'Entropy', 'Cluster', 'Loyalty'];
 
@@ -77,6 +78,39 @@ const mockFraudRows = [
   },
 ];
 
+const transformAPIDataToTableRow = (flag) => {
+  const signalOrder = ['gps', 'ip_mismatch', 'velocity', 'gps_entropy', 'timing_cluster', 'zone_loyalty'];
+  
+  // Get triggered signals
+  const triggeredSignals = flag.signals || {};
+  const signals = signalOrder.map(sig => triggeredSignals[sig] === true);
+  
+  // Count triggered signals
+  const signalCount = signals.filter(s => s).length;
+  
+  // Get signal details for reason
+  const signalDetails = Object.entries(triggeredSignals)
+    .filter(([_, value]) => value === true)
+    .map(([key, _]) => key.replace(/_/g, ' ').toUpperCase())
+    .slice(0, 2);
+  
+  return {
+    id: flag.id,
+    workerId: flag.worker_id || flag.worker?.id || 'Unknown',
+    worker: flag.worker_name || flag.worker?.name || 'Unknown Worker',
+    gigScore: flag.gig_score || flag.worker?.gig_score || 75,
+    trigger: flag.dci_score ? `🌧️ DCI ${flag.dci_score}` : flag.zone || 'Unknown Zone',
+    reason: signalDetails.length > 0 ? signalDetails.join(' + ') : 'Flagged for review',
+    signals: signals,
+    fraudScore: signalCount,
+    riskLevel: flag.risk_level || (signalCount >= 4 ? 'high' : signalCount >= 2 ? 'medium' : 'low'),
+    path: flag.path || 'A',
+    pathLabel: flag.path === 'C' ? '✗ Hard Block' : flag.path === 'B' ? '⚠ Soft Flag · Under Review' : '✓ Clean',
+    rowTone: flag.path === 'C' ? 'hard-block' : 'normal',
+    zone: flag.zone || 'Unknown',
+  };
+};
+
 const heatmapZones = [
   { zone: 'Koramangala', workers: 18, activity: 'high' },
   { zone: 'Whitefield', workers: 14, activity: 'high' },
@@ -88,42 +122,107 @@ const heatmapZones = [
   { zone: 'Bangalore South', workers: 5, activity: 'low' },
 ];
 
+// Calculate zone density from fraud data
+const calculateZoneDensity = (fraudRows) => {
+  const zoneCounts = {};
+  
+  // Count workers by zone
+  fraudRows.forEach(row => {
+    if (row.zone && row.zone !== 'Unknown') {
+      zoneCounts[row.zone] = (zoneCounts[row.zone] || 0) + 1;
+    }
+  });
+  
+  // Sort zones by worker count and assign activity levels
+  const zones = Object.entries(zoneCounts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([zone, count]) => {
+      let activity = 'low';
+      if (count >= 10) activity = 'high';
+      else if (count >= 5) activity = 'medium';
+      return { zone, workers: count, activity };
+    });
+  
+  // If no real zones, fall back to hardcoded heatmap
+  return zones.length > 0 ? zones : heatmapZones;
+};
+
 export const Fraud = () => {
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [filterPath, setFilterPath] = useState('all');
   const [filterRisk, setFilterRisk] = useState('all');
   const [fraudRows, setFraudRows] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
+  const [summaryStats, setSummaryStats] = useState({
+    high_risk_active: 0,
+    resolved_this_week: 0,
+  });
 
-  // Fetch fraud alerts on mount (with fallback to mock data)
+  // Fetch fraud alerts and summary stats - WITH LIVE POLLING
   useEffect(() => {
-    const fetchFraudAlerts = async () => {
+    const fetchFraudData = async () => {
       try {
         setLoading(true);
-        // API endpoint: GET /api/fraud or /api/v1/fraud-alerts or similar
-        // For now, fallback to mock data since fraudAPI.getAll() maps to non-existent endpoint
-        setFraudRows(mockFraudRows);
+        
+        // Fetch fraud flags from API
+        const response = await fraudAPI.getFraudFlags(100, false);
+        
+        // Handle API response - may be wrapped in .data or direct
+        const flagsData = response?.flags || response?.data?.flags || response || [];
+        
+        if (flagsData && Array.isArray(flagsData) && flagsData.length > 0) {
+          console.log('[Fraud] Fetched', flagsData.length, 'fraud flags from API');
+          const transformedRows = flagsData.map(transformAPIDataToTableRow);
+          setFraudRows(transformedRows);
+        } else {
+          console.log('[Fraud] No flags from API, using mock data');
+          setFraudRows(mockFraudRows);
+        }
+        
+        // Fetch summary stats
+        const summaryResponse = await fraudAPI.getFraudSummary();
+        const summaryData = summaryResponse?.data || summaryResponse || {};
+        
+        if (summaryData?.high_risk_active !== undefined) {
+          setSummaryStats({
+            high_risk_active: summaryData.high_risk_active || 0,
+            resolved_this_week: summaryData.resolved_this_week || 0,
+          });
+        }
       } catch (err) {
-        console.error('Error fetching fraud alerts:', err);
+        console.error('[Fraud] Error fetching fraud data:', err);
+        // Fallback to mock data
         setFraudRows(mockFraudRows);
+        setSummaryStats({
+          high_risk_active: mockFraudRows.filter((r) => r.riskLevel === 'high').length,
+          resolved_this_week: 8,
+        });
       } finally {
         setLoading(false);
       }
     };
 
-    fetchFraudAlerts();
+    // Initial fetch
+    fetchFraudData();
+    
+    // Poll every 5 seconds for live updates
+    const interval = setInterval(fetchFraudData, 20000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   const stats = [
     {
       label: 'High Risk Active',
-      value: mockFraudRows.filter((r) => r.riskLevel === 'high').length,
+      value: summaryStats.high_risk_active,
       color: 'bg-red-600 dark:bg-red-700',
       icon: AlertTriangle,
     },
     {
       label: 'Resolved This Week',
-      value: 8,
+      value: summaryStats.resolved_this_week,
       color: 'bg-green-600 dark:bg-green-700',
       icon: TrendingDown,
     },
@@ -148,6 +247,23 @@ export const Fraud = () => {
 
     return result;
   }, [filterPath, filterRisk, fraudRows]);
+
+  // Pagination logic
+  const totalPages = Math.ceil(filteredRows.length / itemsPerPage);
+  const paginatedRows = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredRows.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredRows, currentPage]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterPath, filterRisk]);
+
+  // Calculate zone density from actual fraud data
+  const zoneData = useMemo(() => {
+    return calculateZoneDensity(fraudRows);
+  }, [fraudRows]);
 
   const getRiskBadgeColor = (level) => {
     const colors = {
@@ -175,6 +291,33 @@ export const Fraud = () => {
     };
     return colors[activity];
   };
+
+  // Show loading screen while fetching initial data
+  if (loading) {
+    return (
+      <div className="min-h-[70vh] flex items-center justify-center rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm">
+        <div className="text-center px-6">
+          <div className="mx-auto mb-6 h-16 w-16 rounded-full border-4 border-gray-300/60 dark:border-gray-700 border-t-red-500 animate-spin" />
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Loading Fraud Alerts</h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">Fetching real-time fraud flags and signal analysis from backend...</p>
+          <div className="space-y-2 text-xs text-gray-500 dark:text-gray-500">
+            <div className="flex items-center justify-center gap-2">
+              <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+              <span>Scanning fraud detection signals</span>
+            </div>
+            <div className="flex items-center justify-center gap-2">
+              <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse" style={{animationDelay: '0.2s'}} />
+              <span>Analyzing worker gig scores</span>
+            </div>
+            <div className="flex items-center justify-center gap-2">
+              <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" style={{animationDelay: '0.4s'}} />
+              <span>Mapping zones and risk levels</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -274,7 +417,7 @@ export const Fraud = () => {
                 <thead>
                   <tr className="border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Worker</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Event</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Location</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Fraud Reason</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Signals</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Score</th>
@@ -284,7 +427,7 @@ export const Fraud = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredRows.map((row) => (
+                  {paginatedRows.map((row) => (
                     <tr
                       key={row.id}
                       className={`border-b dark:border-gray-700 transition-colors ${
@@ -308,8 +451,8 @@ export const Fraud = () => {
                         </div>
                       </td>
 
-                      {/* Trigger Event */}
-                      <td className="px-4 py-4 text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap">{row.trigger}</td>
+                      {/* Location */}
+                      <td className="px-4 py-4 text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap font-medium">{row.zone || 'Unknown'}</td>
 
                       {/* Fraud Reason */}
                       <td className="px-4 py-4 text-xs text-gray-600 dark:text-gray-400 max-w-xs">{row.reason}</td>
@@ -393,6 +536,46 @@ export const Fraud = () => {
                 <p className="text-gray-600 dark:text-gray-400 font-medium">No fraud cases match filters</p>
               </div>
             )}
+
+            {/* Pagination Controls */}
+            {filteredRows.length > 0 && (
+              <div className="px-4 py-4 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex items-center justify-between">
+                <div className="text-sm text-gray-600 dark:text-gray-400">
+                  Showing {paginatedRows.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} to {Math.min(currentPage * itemsPerPage, filteredRows.length)} of {filteredRows.length} cases
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1}
+                    className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    ← Prev
+                  </button>
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                      <button
+                        key={page}
+                        onClick={() => setCurrentPage(page)}
+                        className={`px-2 py-1 rounded text-sm font-medium transition-colors ${
+                          page === currentPage
+                            ? 'bg-gigkavach-orange text-white'
+                            : 'border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    Next →
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -406,7 +589,7 @@ export const Fraud = () => {
             </h3>
             <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">Last 7 Days</p>
             <div className="grid grid-cols-2 gap-2">
-              {heatmapZones.map((z) => (
+              {zoneData.map((z) => (
                 <div
                   key={z.zone}
                   className={`${getHeatmapColor(z.activity)} text-white p-3 rounded-lg text-xs font-semibold text-center cursor-pointer hover:opacity-90 transition-opacity`}

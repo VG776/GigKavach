@@ -50,35 +50,73 @@ def load_ai_model():
             _MODEL = "FAILED"
     return _MODEL, _METADATA
 
-def _derive_mock_zone_metrics(pincode: str) -> tuple[float, float]:
+async def _derive_zone_metrics(pincode: str) -> tuple[float, float]:
     """
-    For demo purposes: derived deterministic values for 
-    'historical avg DCI' and 'predicted max DCI' based on the pincode string hash.
-    In real production, this queries from a time-series datastore using Tomorrow.io.
+    Fetch real zone metrics using the DCI engine data.
     
-    TODO (Prod): Replace with API call when Tomorrow.io integration available.
-    Use config.settings.USE_REAL_WEATHER_API feature flag.
+    Steps:
+      1. Try to fetch current DCI from Redis cache (updated every 5 min)
+      2. Query DB for 30-day historical DCI average
+      3. Predict 7-day max using current + historical trend
+      4. Fall back to deterministic values if all APIs fail
     """
-    # Deterministic pseudo-randomness based on pincode
-    pin_val = sum(ord(c) for c in pincode)
-    
-    # 30d avg DCI (usually between 10 and 50)
-    avg_dci = 10 + (pin_val % 40)
-    
-    # Predicted 7d max DCI (usually between 20 and 80)
-    # If standard avg is high, forecast is generally higher
-    pred_dci = avg_dci * 0.8 + (pin_val % 30)
-    
-    return float(avg_dci), float(pred_dci)
+    try:
+        from utils.redis_client import get_dci_cache
+        
+        # 1. Try to get current DCI from Redis cache
+        dci_cache = await get_dci_cache(pincode)
+        if dci_cache and "dci_score" in dci_cache:
+            current_dci = float(dci_cache["dci_score"])
+        else:
+            current_dci = None
+            
+        # 2. Query 30-day historical average from Supabase
+        sb = get_supabase()
+        from datetime import datetime, timedelta
+        thirty_days_ago = (datetime.utcnow() - timedelta(days=30)).isoformat()
+        
+        result = sb.table("dci_logs").select("total_score").eq("pincode", pincode)\
+            .gte("created_at", thirty_days_ago).execute()
+        
+        if result.data and len(result.data) > 0:
+            dci_scores = [float(row.get("total_score", 0)) for row in result.data]
+            avg_dci = sum(dci_scores) / len(dci_scores)
+        else:
+            # Fallback: use current DCI or safe default
+            avg_dci = current_dci if current_dci is not None else 30.0
+        
+        # 3. Predict 7d max: current + trend adjustment
+        if current_dci is not None:
+            # If current is trending high, predict higher for next 7 days
+            pred_dci = min(100, current_dci * 1.1 + 10)  # Add 10% buffer + 10 points
+        else:
+            # Use historical average + safety margin
+            pred_dci = min(100, avg_dci * 1.2)
+            
+        logger.info(f"Zone metrics for {pincode}: avg_30d={avg_dci:.1f}, pred_7d={pred_dci:.1f}")
+        return float(avg_dci), float(pred_dci)
+        
+    except Exception as e:
+        logger.warning(f"Failed to derive real zone metrics for {pincode}: {e}. Using safe fallback.")
+        # Fallback: deterministic but conservative
+        pin_val = sum(ord(c) for c in pincode)
+        avg_dci = 25 + (pin_val % 30)  # 25-55 range (conservative)
+        pred_dci = avg_dci + 15  # Slightly higher prediction
+        return float(avg_dci), float(pred_dci)
 
-def compute_dynamic_quote(worker_id: str, plan: str) -> dict:
+async def compute_dynamic_quote(worker_id: str, plan: str) -> dict:
     """
     Given a worker_id and requested plan, computes the personalized
     dynamic premium quote integrating 'Discount-Only' psychology.
+    Uses real DCI data from weather APIs and historical trends.
+    
+    Returns:
+        dict with keys: worker_id, base_premium, dynamic_premium, 
+                        discount_applied, bonus_coverage_hours, plan_type, insights
     """
     model, _ = load_ai_model()
     
-    # 1. Fetch Worker Base Profile
+    # 1. Fetch Worker Base Profile from DB
     sb = get_supabase()
     result = sb.table("workers").select("id, shift, pin_codes, gig_score, plan").eq("id", worker_id).execute()
     
@@ -90,6 +128,9 @@ def compute_dynamic_quote(worker_id: str, plan: str) -> dict:
     shift = worker.get("shift", "day")
     pincodes = worker.get("pin_codes", [])
     primary_pincode = pincodes[0] if pincodes else "560001"
+    
+    # Normalize gig_score to [0, 100]
+    gig_score = max(0, min(100, gig_score))
     
     # Validation: Enforce base rules (new prices)
     try:
@@ -109,13 +150,14 @@ def compute_dynamic_quote(worker_id: str, plan: str) -> dict:
         raw_discount_mult = 0.05 if gig_score > 80 else 0.0
         reason_msg = "Unable to compute personalized discount at this time. Standard rates apply."
     else:
-        # 2. Extract Geospacial Features (COMPUTED ONCE, REUSED)
+        # 2. Extract Geospacial Features using real DCI data (COMPUTED ONCE, REUSED)
         try:
-            avg_dci, pred_dci = _derive_mock_zone_metrics(primary_pincode)
+            avg_dci, pred_dci = await _derive_zone_metrics(primary_pincode)
         except Exception as e:
             logger.warning(f"Failed to derive zone metrics for pincode {primary_pincode}: {e}")
             avg_dci, pred_dci = 30.0, 50.0  # Fallback safe defaults
         
+        # 3. Build feature vector with proper validation
         features = pd.DataFrame([{
             'worker_gig_score': gig_score,
             'pincode_30d_avg_dci': avg_dci,
@@ -126,21 +168,33 @@ def compute_dynamic_quote(worker_id: str, plan: str) -> dict:
             'shift_flexible': int(shift == 'flexible')
         }])
         
-        # 3. Model Inference
-        prediction = model.predict(features)[0]
-        raw_discount_mult = np.clip(prediction, 0.0, 0.30)
+        # 4. Model Inference with clipping
+        try:
+            prediction = model.predict(features)[0]
+            raw_discount_mult = np.clip(prediction, 0.0, 0.30)
+        except Exception as e:
+            logger.error(f"Model inference failed for {worker_id}: {e}")
+            raw_discount_mult = 0.05 if gig_score > 80 else 0.0
         
-        # Explainability feature mapping for UI Insights (computed once)
+        # Explainability: generate human-readable reason (computed once)
         reason_msg = _generate_nlp_reason(raw_discount_mult, gig_score, pred_dci, shift)
 
-    # 4. Premium Math
-    # Discount is strictly proportional to base price, capped mathematically
+    # 5. Premium Math with validation
     discount_amount = round(base_price * raw_discount_mult, 1)
-    
-    # Ensure Discount isn't mathematically bizarre
     discount_amount = max(0.0, discount_amount)
     
     final_premium = base_price - discount_amount
+    
+    # Ensure premium stays within valid range (0.7x to 1.3x of base after discount)
+    # For BASIC (₹30): range is ₹21-₹39
+    # For PLUS (₹37): range is ₹25.90-₹48.10
+    # For PRO (₹44): range is ₹30.80-₹57.20
+    min_premium = base_price * 0.7
+    max_premium = base_price * 1.3
+    final_premium = np.clip(final_premium, min_premium, max_premium)
+    
+    # Recalculate actual discount based on bounded premium
+    discount_amount = base_price - final_premium
     
     # Check if we should offer 'Bonus Coverage' instead of pure discount
     # E.g. If DCI is super high, we don't hike prices (Psychology rule!), 

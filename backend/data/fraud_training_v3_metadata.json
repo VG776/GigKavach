@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-04-11T16:07:10.200005",
+  "generated_at": "2026-04-17T12:40:40.432980",
   "regeneration_attempts": 0,
   "total_records": 5000,
   "fraud_records": 1466,
@@ -50,7 +50,7 @@
   "num_features": 33,
   "quality_metrics": {
     "dt_baseline_accuracy": 0.8462,
-    "rf_upper_bound_accuracy": 0.8536
+    "rf_upper_bound_accuracy": 0.8534
   },
   "target_metrics": {
     "expected_cv_std_min": 0.03,

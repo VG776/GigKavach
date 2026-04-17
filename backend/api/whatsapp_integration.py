@@ -14,12 +14,13 @@ from pydantic import BaseModel
 from typing import Optional, List
 import httpx
 import logging
+from config.settings import settings
 
 logger = logging.getLogger("gigkavach.whatsapp_integration")
 router = APIRouter(tags=["WhatsApp Integration"])
 
 # Bot service URL (running on port 3001)
-BOT_SERVICE_URL = "http://localhost:3001"
+BOT_SERVICE_URL = settings.BOT_API_URL or "http://localhost:3001"
 
 # ─── Pydantic Models ────────────────────────────────────────────────
 

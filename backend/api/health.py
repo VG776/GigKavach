@@ -13,7 +13,7 @@ Endpoints:
 """
 
 from fastapi import APIRouter
-from datetime import datetime
+from datetime import datetime, timezone
 from config.settings import settings
 
 router = APIRouter(prefix="/health", tags=["Health"])
@@ -30,7 +30,7 @@ async def health_check():
         "service": "GigKavach API",
         "version": "0.1.0-phase2",
         "environment": settings.APP_ENV,
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
     }
 
 
@@ -79,6 +79,6 @@ async def full_health_check():
 
     return {
         "status": "ok" if all_ok else "degraded",
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
         "checks": checks,
     }

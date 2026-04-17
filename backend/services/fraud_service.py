@@ -7,12 +7,14 @@ Provides high-level API for fraud checking with logging and audit trail.
 import os
 import sys
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
+# Ensure project root is in path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 from ml.fraud_detector import get_detector
 from services.gigscore_service import update_gig_score, GigScoreEvent
+from utils.db import get_supabase
 
 # Configure logging
 logging.basicConfig(
@@ -21,153 +23,113 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-
 class FraudDetectionService:
     """Service layer for fraud detection."""
     
     def __init__(self):
         self.detector = get_detector()
     
-    def check_fraud(self, claim, worker_history=None, user_context=None):
+    async def check_fraud(self, claim, worker_history=None, user_context=None):
         """
-        Check claim for fraud.
+        Executes the three-stage fraud detection pipeline:
+        1. Behavioral Telemetry Analysis (GPS Jump, Speed Anomalies)
+        2. Pattern Recognition (Device ID, Rapid Payout Reclaim)
+        3. ML-Driven ML Anomaly Detection (Isolation Forest)
         
-        Args:
-            claim (dict): Claim data (dci_score, gps_coordinates, etc.)
-            worker_history (dict, optional): Worker's claim history
-            user_context (dict, optional): Additional context (user_id, api_version, etc.)
-        
-        Returns:
-            dict with keys:
-              - is_fraud (bool)
-              - fraud_score (float): 0-1
-              - decision (str): APPROVE|FLAG_50|BLOCK
-              - fraud_type (str): Type of fraud detected (if any)
-              - payout_action (str): What to do with payout (100%|50%_HOLD_48H|0%)
-              - explanation (str): Human-readable reason
-              - timestamp (str): ISO timestamp
-              - detector_version (str): Model version
-              - audit_log (dict): For logging/debugging
+        Returns a dict with 'decision', 'fraud_score', and 'fraud_type'.
         """
+        worker_id = claim.get('worker_id')
+        claim_id = claim.get('claim_id')
+        
+        logger.info(f"Starting fraud check for worker={worker_id} claim={claim_id}")
         
         try:
-            # Get fraud detection result
-            result = self.detector.detect_fraud(claim, worker_history)
+            # --- STAGE 0: Enrichment ---
+            # Fetch worker's delivery pin codes to verify location
+            sb = get_supabase()
+            worker_res = sb.table("workers").select("pin_codes").eq("id", worker_id).single().execute()
             
-            # Map decision to payout action
-            payout_action = self._get_payout_action(result['decision'])
-            
-            # Build response
-            response = {
-                'is_fraud': result['decision'] != 'APPROVE',
-                'fraud_score': result['fraud_score'],
-                'decision': result['decision'],
-                'fraud_type': result['fraud_type'],
-                'payout_action': payout_action,
-                'explanation': self._get_explanation(result),
-                'timestamp': datetime.utcnow().isoformat(),
-                'detector_version': '2.0',
-                'audit_log': {
-                    'stage1_result': result['stage1_result'],
-                    'stage2_score': result['stage2_score'],
-                    'stage3_score': result['stage3_score'],
-                    'confidence': result['confidence'],
-                    'claim_id': claim.get('claim_id'),
-                    'worker_id': claim.get('worker_id'),
-                    'user_context': user_context or {},
-                }
-            }
-            
-            # Logging
-            log_msg = (
-                f"Fraud check - claim_id={claim.get('claim_id')}, "
-                f"worker_id={claim.get('worker_id')}, "
-                f"decision={response['decision']}, "
-                f"fraud_score={response['fraud_score']:.4f}"
-            )
-            
-            if response['is_fraud']:
-                logger.warning(f"[FRAUD DETECTED] {log_msg} - {response['fraud_type']}")
-                
-                # INTEGRATION: Update GigScore based on fraud tier
-                worker_id = claim.get('worker_id')
-                if worker_id:
-                    if response['decision'] == 'FLAG_50':
-                        update_gig_score(worker_id, GigScoreEvent.FRAUD_TIER_1, {"claim_id": claim.get('claim_id')})
-                    elif response['decision'] == 'BLOCK':
-                        update_gig_score(worker_id, GigScoreEvent.FRAUD_TIER_2, {"claim_id": claim.get('claim_id')})
+            if worker_res.data:
+                worker_pincodes = worker_res.data.get('pin_codes', [])
+                logger.info(f"Enriched claim with worker zones: {worker_pincodes}")
             else:
-                logger.info(f"[FRAUD CLEAR] {log_msg}")
+                worker_pincodes = []
+                logger.warning(f"Could not find worker zones for enrichment: {worker_id}")
+
+            # --- STAGE 1: Real-time Behavioral Telemetry & Shield Logic ---
+            from utils.redis_client import get_redis
+            import json
             
-            return response
-        
-        except Exception as e:
-            logger.error(f"Fraud detection error: {str(e)}")
-            # Safe default: flag suspicious claims
+            rc = await get_redis()
+            
+            # 1. Telemetry Window Fetching
+            raw_history = await rc.lrange(f"telemetry:{worker_id}", 0, -1)
+            location_history = [json.loads(s) for s in raw_history] if raw_history else []
+            
+            # 2. Shield Gating (Signal 2): Verify shift was active
+            shift_data = await rc.get(f"shift_active:{worker_id}")
+            is_on_shift = shift_data is not None
+            
+            # 3. Geo-IP Cross-check (Signal 1): 
+            # In production, we get IP from request. For simulation, use user_context
+            ip_lat = user_context.get('ip_lat') if user_context else None
+            ip_lng = user_context.get('ip_lng') if user_context else None
+            
+            gps_ip_dist = 0
+            if ip_lat and ip_lng and location_history:
+                from services.telemetry_service import telemetry_processor
+                curr_lat = location_history[0]['lat']
+                curr_lng = location_history[0]['lng']
+                gps_ip_dist = telemetry_processor._haversine(ip_lat, ip_lng, curr_lat, curr_lng)
+            
+            # Inject signals into claim for the detector
+            claim['location_history'] = location_history
+            claim['is_on_shift'] = is_on_shift
+            claim['gps_ip_distance_km'] = gps_ip_dist
+            
+            logger.info(f"Enriched claim with telemetry. OnShift={is_on_shift}, Points={len(location_history)}, IP-Dist={gps_ip_dist:.1f}km")
+            
+            # --- STAGE 2: Model Inference ---
+            model_result = self.detector.detect_fraud(claim)
+            
+            decision = model_result.get('decision', 'APPROVE')
+            fraud_score = model_result.get('fraud_score', 0.0)
+            fraud_type = model_result.get('fraud_type', 'none')
+            
+            # --- STAGE 3: Trinity Feedback Integration ---
+            # If fraud is detected, trigger GigScore penalty automatically
+            if decision in ['FLAG_50', 'BLOCK']:
+                penalty_event = GigScoreEvent.FRAUD_TIER_1 if decision == 'FLAG_50' else GigScoreEvent.FRAUD_TIER_2
+                update_gig_score(worker_id, penalty_event, {
+                    'claim_id': claim_id,
+                    'fraud_score': fraud_score,
+                    'fraud_type': fraud_type,
+                    'timestamp': datetime.now(timezone.utc).isoformat()
+                })
+                logger.warning(f"Trinity Feedback: Worker={worker_id} penalized for {fraud_type}")
+
             return {
-                'is_fraud': True,
-                'fraud_score': 0.5,
-                'decision': 'FLAG_50',
-                'fraud_type': 'unknown_error',
-                'payout_action': '50%_HOLD_48H',
-                'explanation': 'Error in fraud detection - holding for review',
-                'timestamp': datetime.utcnow().isoformat(),
-                'detector_version': '2.0',
-                'audit_log': {
-                    'error': str(e),
-                    'claim_id': claim.get('claim_id', 'unknown'),
-                }
+                'decision': decision,
+                'fraud_score': fraud_score,
+                'fraud_type': fraud_type,
+                'is_fraud': decision != 'APPROVE',
+                'explanation': f"Detected {fraud_type} with {fraud_score*100:.1f}% confidence.",
+                'timestamp': datetime.now(timezone.utc).isoformat()
             }
-    
-    def _get_payout_action(self, decision):
-        """Map fraud decision to payout action."""
-        mapping = {
-            'APPROVE': '100%',
-            'FLAG_50': '50%_HOLD_48H',
-            'BLOCK': '0%',
-        }
-        return mapping.get(decision, '50%_HOLD_48H')
-    
-    def _get_explanation(self, result):
-        """Generate human-readable explanation."""
-        decision = result['decision']
-        fraud_type = result['fraud_type']
-        fraud_score = result['fraud_score']
-        stage1 = result['stage1_result']
-        
-        if stage1 != 'PASS':
-            return stage1
-        
-        if decision == 'APPROVE':
-            return 'Claim approved: fraud score < 0.30'
-        elif decision == 'FLAG_50':
-            return (
-                f'Claim flagged ({fraud_score:.1%}): Possible {fraud_type}. '
-                '50% paid now, 50% held for 48h verification.'
-            )
-        elif decision == 'BLOCK':
-            return (
-                f'Claim blocked ({fraud_score:.1%}): Detected {fraud_type}. '
-                'Zero payout due to fraud risk.'
-            )
-        else:
-            return 'Unknown decision'
+            
+        except Exception as e:
+            logger.error(f"Fraud detection error: {e}")
+            # Safe fallback: Flag suspicious but don't block
+            return {
+                'decision': 'FLAG_50',
+                'fraud_score': 0.5,
+                'fraud_type': 'system_error',
+                'is_fraud': True,
+                'explanation': f"Error during assessment: {e}. Flagged for manual review.",
+                'timestamp': datetime.now(timezone.utc).isoformat()
+            }
 
-
-# Global service instance
-_service = None
-
-
-def get_fraud_service():
-    """Get or initialize the fraud detection service singleton."""
-    global _service
-    if _service is None:
-        _service = FraudDetectionService()
-    return _service
-
-
-# Convenience functions
-def check_fraud(claim, worker_history=None, user_context=None):
-    """Check claim for fraud."""
-    service = get_fraud_service()
-    return service.check_fraud(claim, worker_history, user_context)
+async def check_fraud(claim, worker_history=None, user_context=None):
+    """Entry point for checking fraud."""
+    service = FraudDetectionService()
+    return await service.check_fraud(claim, worker_history, user_context)

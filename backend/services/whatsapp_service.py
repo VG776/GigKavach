@@ -6,10 +6,6 @@ Handles all outbound messages to workers via whatsapp-web.js bot API.
 All 30 worker-facing messages are stored in MESSAGES dict below in
 5 languages. No runtime translation API is used — all messages are
 pre-translated and stored statically (free, instant, reliable).
-
-Usage:
-    from services.whatsapp_service import notify_worker
-    notify_worker("+919876543210", "disruption_alert", language="hi", dci=74, amount=280)
 """
 
 import httpx
@@ -46,11 +42,19 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
 
     "ask_shift": {
-        "en": "What are your typical working hours?\n1️⃣ Morning (6AM–2PM)\n2️⃣ Day (9AM–9PM)\n3️⃣ Night (6PM–2AM)\n4️⃣ Flexible",
+        "en": "What are your typical working hours?\n1️⃣ Morning (6AM-2PM)\n2️⃣ Evening (2PM-10PM)\n3️⃣ Night (10PM-6AM)\n4️⃣ Flexible",
         "kn": "ನಿಮ್ಮ ಸಾಮಾನ್ಯ ಕೆಲಸದ ಸಮಯ ಯಾವುದು?\n1️⃣ ಬೆಳಿಗ್ಗೆ (6AM–2PM)\n2️⃣ ಹಗಲು (9AM–9PM)\n3️⃣ ರಾತ್ರಿ (6PM–2AM)\n4️⃣ ಯಾವುದಾದರೂ ಸಮಯ",
         "hi": "आप आमतौर पर किस समय काम करते हैं?\n1️⃣ सुबह (6AM–2PM)\n2️⃣ दिन (9AM–9PM)\n3️⃣ रात (6PM–2AM)\n4️⃣ कभी भी",
         "ta": "உங்கள் வேலை நேரம் என்ன?\n1️⃣ காலை (6AM–2PM)\n2️⃣ பகல் (9AM–9PM)\n3️⃣ இரவு (6PM–2AM)\n4️⃣ நெகிழ்வான",
         "te": "మీరు సాధారణంగా ఏ సమయానికి పని చేస్తారు?\n1️⃣ ఉదయం (6AM–2PM)\n2️⃣ పగలు (9AM–9PM)\n3️⃣ రాత్రి (6PM–2AM)\n4️⃣ ఎప్పుడైనా",
+    },
+
+    "ask_verification": {
+        "en": "To protect against fraud, please share your Aadhaar or DL number for identity verification via DigiLocker:",
+        "kn": "ವಂಚನೆ ತಡೆಯಲು, ಡಿಜಿಲಾಕರ್ ಮೂಲಕ ಗುರುತಿನ ಪರಿಶೀಲನೆಗಾಗಿ ನಿಮ್ಮ ಆಧಾರ್ ಅಥವಾ DL ಸಂಖ್ಯೆಯನ್ನು ಹಂಚಿಕೊಳ್ಳಿ:",
+        "hi": "धोखाधड़ी से बचने के लिए, डिजिलॉकर के माध्यम से पहचान सत्यापन के लिए अपना आधार या डीएल नंबर साझा करें:",
+        "ta": "மோசடிக்கு எதிராகப் பாதுகாக்க, டிஜிலாக்கர் மூலம் அடையாளத்தைச் சரிபார்க்க உங்கள் ஆதார் அல்லது டிஎல் எண்ணைப் பகிரவும்:",
+        "te": "మోసాల నుండి రక్షణ కోసం, డిజీలాకర్ ద్వారా గుర్తింపు ధృవీకరణ కోసం మీ ఆధార్ లేదా డిఎల్ నంబర్‌ను షేర్ చేయండి:",
     },
 
     "ask_upi": {
@@ -59,6 +63,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "hi": "पेमेंट के लिए अपना UPI ID दें (जैसे: ravi@upi):",
         "ta": "பணம் பெற உங்கள் UPI ID அனுப்பவும் (எ.கா: ravi@upi):",
         "te": "పేమెంట్ కోసం మీ UPI ID పంపండి (ఉదా: ravi@upi):",
+    },
+
+    "ask_verification": {
+        "en": "🛡️ Identity Verification: Please share your Aadhaar or DL number (for demo, any 12-digit number works):",
+        "kn": "🛡️ ಗುರುತಿನ ಚೀಟಿ ಪರಿಶೀಲನೆ: ನಿಮ್ಮ ಆಧಾರ್ ಅಥವಾ ಡಿಎಲ್ ಸಂಖ್ಯೆಯನ್ನು ಹಂಚಿಕೊಳ್ಳಿ:",
+        "hi": "🛡️ पहचान सत्यापन: कृपया अपना आधार या डीएल नंबर साझा करें:",
+        "ta": "🛡️ அடையாளச் சரிபார்ப்பு: உங்கள் ஆதார் அல்லது டிஎல் எண்ணைப் பகிரவும்:",
+        "te": "🛡️ గుర్తింపు ధృవీకరణ: దయచేసి మీ ఆధార్ లేదా డిఎల్ నంబర్‌ను పంపండి:",
     },
 
     "ask_pincode": {
@@ -89,8 +101,35 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "✅ You're already registered! Type STATUS to check coverage.",
         "kn": "✅ ನೀವು ಈಗಾಗಲೇ ನೋಂದಾಯಿತರಾಗಿದ್ದೀರಿ! STATUS ಟೈಪ್ ಮಾಡಿ ಕವರೇಜ್ ಪರಿಶೀಲಿಸಿ.",
         "hi": "✅ आप पहले से पंजीकृत हैं! STATUS टाइप करके कवरेज जांचें।",
-        "ta": "✅ நீங்கள் ஏற்கனவே பதிவுசெய்யப்பட்டுள்ளீர்கள்! STATUS என்று தட்டச்சு செய்து அட்டையை சரிபார்க்கவும்.",
+        "ta": "✅ நீங்கள் ಈಗಾಗಲೇ ನೋಂದಾಯಿತರಾಗಿದ್ದೀರಿ! STATUS ಟೈಪ್ ಮಾಡಿ ಕವರೇಜ್ ಪರಿಶೀಲಿಸಿ.",
         "te": "✅ మీరు ఇప్పటికే నమోదు చేయబడ్డారు! STATUS టైప్ చేసి కవరేజ్ చెక్ చేయండి.",
+    },
+
+    # SHIFT management commands — RESTORED SECTION 10
+    "shift_started": {
+        "en": "🚀 *Shift Started!* Your location is now being monitored for protection. Use STOP to end your shift.",
+        "kn": "🚀 *ಶಿಫ್ಟ್ ಪ್ರಾರಂಭವಾಯಿತು!* ನಿಮ್ಮ ಸ್ಥಳವನ್ನು ಈಗ ಗಮನಿಸಲಾಗುತ್ತಿದೆ. ಶಿಫ್ಟ್ ಕೊನೆಗೊಳಿಸಲು STOP ಬಳಸಿ.",
+        "hi": "🚀 *शिफ्ट शुरू!* अब आपकी लोकेशन को मॉनिटर किया जा रहा है। शिफ्ट खत्म करने के लिए STOP लिखें।",
+        "ta": "🚀 *ஷிஃப்ட் தொடங்கியது!* உங்கள் இருப்பிடம் இப்போது கண்காணிக்கப்படுகிறது. நிறுத்த STOP பயன்படுத்தவும்.",
+        "te": "🚀 *షిఫ్ట్ ప్రారంభమైంది!* మీ లొకేషన్ ఇప్పుడు మానిటర్ చేయబడుతోంది. ఆపడానికి STOP ఉపయోగించండి.",
+    },
+
+    "shift_stopped": {
+        "en": "⏹️ *Shift Ended!* Duration: {duration}. Monitoring paused. Great work today! 🛡️ (+0.5 trust boost)",
+        "kn": "⏹️ *ಶಿಫ್ಟ್ ಕೊನೆಗೊಂಡಿತು!* ಕಾಲಾವಧಿ: {duration}. ಮೇಲ್ವಿಚಾರಣೆ ನಿಲ್ಲಿಸಲಾಗಿದೆ. 🛡️",
+        "hi": "⏹️ *शिफ्ट खत्म!* समय: {duration}। मॉनिटरिंग बंद। अच्छा काम किया! 🛡️",
+        "ta": "⏹️ *ஷிஃப்ட் முடிந்தது!* நேரம்: {duration}. கண்காணிப்பு நிறுத்தப்பட்டது. 🛡️",
+        "te": "⏹️ *షిఫ్ట్ పూర్తయింది!* సమయం: {duration}. మానిటరింగ్ ఆపబడింది. 🛡️",
+    },
+
+    "onboarding_summary": {
+        "en": "🌟 *Welcome to GigKavach!* 🛡️\n\nOnboarding Complete.\nPlan: *{plan}*\nDynamic Premium: *₹{premium}/week*\n\n📊 *Your Personal Dashboard:*\n{profile_url}\n\nStay protected out there!",
+        "hi": "🌟 *GigKavach में आपका स्वागत है!* 🛡️\n\nपंजीकरण पूरा हुआ।\nप्लान: *{plan}*\nप्रीमियम: *₹{premium}/सप्ताह*\n\n📊 *आपका डैशबोर्ड:*\n{profile_url}",
+    },
+
+    "payout_flagged": {
+        "en": "🛡️ *GigKavach Verification Notice*\n\nHello, your payout for today has been flagged for *manual review* due to irregular GPS telemetry. 🛰️\n\nDon't worry! Our team is verifying the data. If valid, ₹{amount} will be credited to {upi} within 48 hours.\n\nYou can contest this by replying *APPEAL*.",
+        "hi": "🛡️ *GigKavach सत्यापन सूचना*\n\nनमस्ते, आज का आपका भुगतान *मैनुअल समीक्षा* के लिए रोक दिया गया है। 🛰️\n\nचिंता न करें! हमारी टीम डेटा की जांच कर रही है। यदि सही पाया गया, तो ₹{amount} 48 घंटों के भीतर आपके UPI {upi} में जमा कर दिया जाएगा।",
     },
 
     # ── Disruption Alerts ────────────────────────────────────────────────────
@@ -98,17 +137,25 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "🚨 Disruption detected in your zone (DCI: {dci}).\nYour coverage is active. Payout will be calculated at end of your shift today.",
         "kn": "🚨 ನಿಮ್ಮ ಝೋನ್‌ನಲ್ಲಿ ಅಡ್ಡಿ ಪತ್ತೆಯಾಗಿದೆ (DCI: {dci}).\nನಿಮ್ಮ ಕವರೇಜ್ ಸಕ್ರಿಯ. ಶಿಫ್ಟ್ ಕೊನೆಯಲ್ಲಿ ಪಾವತಿ ಲೆಕ್ಕ ಹಾಕಲಾಗುವುದು.",
         "hi": "🚨 आपके ज़ोन में बाधा पकड़ी गई (DCI: {dci})।\nआपकी कवरेज एक्टिव है। आज शिफ्ट खत्म होने पर पेमेंट भेजा जाएगा।",
-        "ta": "🚨 உங்கள் மண்டலத்தில் இடையூறு கண்டறியப்பட்டது (DCI: {dci}).\nஉங்கள் அட்டை செயலில் உள்ளது. இன்று உங்கள் ஷிப்ட் முடிவில் கட்டணம் கணக்கிடப்படும்.",
+        "ta": "🚨 ನಿಮ್ಮ ಝೋನ್‌ನಲ್ಲಿ ಅಡ್ಡಿ ಪತ್ತೆಯಾಗಿದೆ (DCI: {dci}).",
         "te": "🚨 మీ జోన్‌లో అంతరాయం గుర్తించబడింది (DCI: {dci}).\nమీ కవరేజ్ యాక్టివ్ గా ఉంది. నేడు మీ షిఫ్ట్ చివరలో పేమెంట్ లెక్కించబడుతుంది.",
     },
 
     # ── Payout Confirmations ─────────────────────────────────────────────────
     "payout_sent": {
-        "en": "💸 ₹{amount} sent to {upi}. Ref: {ref}.\nYour income is protected. 🛡️",
-        "kn": "💸 ₹{amount} {upi} ಗೆ ಕಳುಹಿಸಲಾಗಿದೆ. Ref: {ref}.\nನಿಮ್ಮ ಆದಾಯ ಸುರಕ್ಷಿತ. 🛡️",
-        "hi": "💸 ₹{amount} {upi} में भेज दिया गया। Ref: {ref}.\nआपकी कमाई सुरक्षित है। 🛡️",
-        "ta": "💸 ₹{amount} {upi} க்கு அனுப்பப்பட்டது. Ref: {ref}.\nஉங்கள் வருமானம் பாதுகாக்கப்பட்டுள்ளது. 🛡️",
-        "te": "💸 ₹{amount} {upi} కి పంపబడింది. Ref: {ref}.\nమీ సంపాదన రక్షించబడింది. 🛡️",
+        "en": "💸 ₹{amount} sent to {upi} for *{hours}h* of disruption. Ref: {ref}.\nYour income is protected. 🛡️",
+        "kn": "💸 ₹{amount} ಅನ್ನು {upi} ಗೆ ಕಳುಹಿಸಲಾಗಿದೆ (*{hours}h* ಅಡಚಣೆಗಾಗಿ). Ref: {ref}.\nನಿಮ್ಮ ಆದಾಯ ಸುರಕ್ಷಿತ. 🛡️",
+        "hi": "💸 ₹{amount} {upi} में भेज दिया गया (*{hours}h* की बाधा के लिए)। Ref: {ref}.\nआपकी कमाई सुरक्षित है। 🛡️",
+        "ta": "💸 ₹{amount} {upi} க்கு அனுப்பப்பட்டது (*{hours}h* இடையூறுக்காக). Ref: {ref}.\nஉங்கள் வருமானம் பாதுகாக்கப்பட்டுள்ளது. 🛡️",
+        "te": "💸 ₹{amount} {upi} కి పంపబడింది (*{hours}h* అంతరాయం కోసం). Ref: {ref}.\nమీ సంపాదన రక్షించబడింది. 🛡️",
+    },
+
+    "payout_processed": {
+        "en": "🛡️ *GigKavach Payout Successful!*\n\nHello {name}, your disruption payout of *₹{amount}* has been processed successfully to your UPI account.\n\nRef: {ref}",
+        "kn": "🛡️ *GigKavach ಪಾವತಿ ಯಶಸ್ವಿಯಾಗಿದೆ!*\n\nನಮಸ್ಕಾರ {name}, ನಿಮ್ಮ ಅಡಚಣೆಯ ಪಾವತಿ *₹{amount}* ನಿಮ್ಮ UPI ಖಾತೆಗೆ ಯಶಸ್ವಿಯಾಗಿ ಜಮೆಯಾಗಿದೆ.",
+        "hi": "🛡️ *GigKavach भुगतान सफल हुआ!*\n\nनमस्ते {name}, आपका *₹{amount}* का भुगतान आपके UPI खाते में सफलतापूर्वक जमा हो गया है।",
+        "ta": "🛡️ *GigKavach பணம் செலுத்துதல் வெற்றி!*\n\nவணக்கம் {name}, உங்கள் *₹{amount}* தொகை உங்கள் UPI கணக்கிற்கு வெற்றிகரமாக மாற்றப்பட்டது.",
+        "te": "🛡️ *GigKavach పేమెంట్ విజయవంతమైంది!*\n\nనమస్కారం {name}, మీ *₹{amount}* పేమెంట్ మీ UPI ఖాతాకు విజయవంతంగా చేరుకుంది.",
     },
 
     # Soft flag — 50% payout, 48hr re-verification in progress
@@ -116,7 +163,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Your payout is processing. Verification active due to signal conditions in your zone. No action needed.\n₹{amount} will arrive today. Remaining balance auto-credits in 48hrs.",
         "kn": "ನಿಮ್ಮ ಪಾವತಿ ಪ್ರಕ್ರಿಯೆಯಲ್ಲಿದೆ. ನಿಮ್ಮ ಝೋನ್‌ನ ಸಿಗ್ನಲ್ ಸ್ಥಿತಿಯಿಂದ ಪರಿಶೀಲನೆ ಸಕ್ರಿಯ. ₹{amount} ಇಂದು ಬರುತ್ತದೆ.",
         "hi": "आपका पेमेंट प्रोसेस हो रहा है। आपके ज़ोन में सिग्नल की स्थिति के कारण वेरिफिकेशन चल रहा है। ₹{amount} आज आएगा।",
-        "ta": "உங்கள் கட்டணம் செயலாக்கப்படுகிறது. சிக்னல் நிலை காரணமாக சரிபார்ப்பு செயலில் உள்ளது. ₹{amount} இன்று வரும்.",
+        "ta": "உங்கள் கட்டணம் செயலாக்கப்படுகிறது. சிக்னல் நிலை காரணமாக சரிபார்ப்பு செயலில் உள்ளது. ₹{amount} ಇಂದು ಬರುತ್ತದೆ.",
         "te": "మీ పేమెంట్ ప్రాసెస్ అవుతోంది. సిగ్నల్ పరిస్థితుల కారణంగా వెరిఫికేషన్ యాక్టివ్ గా ఉంది. ₹{amount} నేడు వస్తుంది.",
     },
 
@@ -131,20 +178,20 @@ MESSAGES: dict[str, dict[str, str]] = {
 
     # STATUS command response
     "status_response": {
-        "en": "📊 Zone {pin_code} Status:\nDCI Score: {dci} ({severity})\nCoverage: {plan} ✅\nShift: {shift}\nType HELP for all commands.",
-        "kn": "📊 ಝೋನ್ {pin_code} ಸ್ಥಿತಿ:\nDCI: {dci} ({severity})\nಕವರೇಜ್: {plan} ✅\nHELP ಟೈಪ್ ಮಾಡಿ ಎಲ್ಲ ಆಜ್ಞೆಗಳಿಗಾಗಿ.",
-        "hi": "📊 ज़ोन {pin_code} की स्थिति:\nDCI: {dci} ({severity})\nकवरेज: {plan} ✅\nसभी कमांड के लिए HELP टाइप करें।",
-        "ta": "📊 மண்டல {pin_code} நிலை:\nDCI: {dci} ({severity})\nகவரேஜ்: {plan} ✅\nHELP என்று தட்டச்சு செய்யுங்கள்.",
-        "te": "📊 జోన్ {pin_code} స్థితి:\nDCI: {dci} ({severity})\nకవరేజ్: {plan} ✅\nHELP టైప్ చేయండి.",
+        "en": "📊 Zone {pin_code} Status:\nDCI Score: {dci} ({severity})\nCoverage: {plan} ✅\nPremium: ₹{premium} (Trust Adjusted)\nShift: {shift}\nType HELP for all commands.",
+        "kn": "📊 ಝೋನ್ {pin_code} ಸ್ಥಿತಿ:\nDCI: {dci} ({severity})\nಕವರೇಜ್: {plan} ✅\nಪ್ರೀಮಿಯಂ: ₹{premium} (Trust Adjusted)\nHELP ಟೈಪ್ ಮಾಡಿ ಎಲ್ಲ ಆಜ್ಞೆಗಳಿಗಾಗಿ.",
+        "hi": "📊 ज़ोन {pin_code} की स्थिति:\nDCI: {dci} ({severity})\nकवरेज: {plan} ✅\nप्रीमियम: ₹{premium} (Trust Adjusted)\nसभी कमांड के लिए HELP टाइप करें।",
+        "ta": "📊 மண்டல {pin_code} நிலை:\nDCI: {dci} ({severity})\nகவரೇಜ್: {plan} ✅\nபிரீமியம்: ₹{premium} (Trust Adjusted)\nHELP என்று தட்டச்சு செய்யுங்கள்.",
+        "te": "📊 జోన్ {pin_code} స్థితి:\nDCI: {dci} ({severity})\nకవరేజ్: {plan} ✅\nప్రీమియం: ₹{premium} (Trust Adjusted)\nHELP టైప్ చేయండి.",
     },
 
     # HELP command
     "help": {
-        "en": "GigKavach Commands:\n• STATUS — Zone DCI & coverage\n• RENEW — Renew for next week\n• SHIFT — Update working hours\n• LANG — Change language\n• APPEAL — Contest a decision\n• HELP — Show this menu",
-        "kn": "GigKavach ಆಜ್ಞೆಗಳು:\n• STATUS — ಝೋನ್ DCI & ಕವರೇಜ್\n• RENEW — ಮುಂದಿನ ವಾರ ನವೀಕರಿಸಿ\n• SHIFT — ಕೆಲಸದ ಸಮಯ ನವೀಕರಿಸಿ\n• LANG — ಭಾಷೆ ಬದಲಿಸಿ\n• APPEAL — ನಿರ್ಧಾರವನ್ನು ಆಕ್ಷೇಪಿಸಿ",
-        "hi": "GigKavach कमांड:\n• STATUS — जोन DCI और कवरेज\n• RENEW — अगले हफ्ते नवीनीकरण\n• SHIFT — काम का समय बदलें\n• LANG — भाषा बदलें\n• APPEAL — फैसले को चुनौती दें",
-        "ta": "GigKavach கட்டளைகள்:\n• STATUS — மண்டல DCI & அட்டை\n• RENEW — அடுத்த வாரம் புதுப்பிக்க\n• SHIFT — வேலை நேரம் புதுப்பிக்க\n• LANG — மொழி மாற்று\n• APPEAL — முடிவை சவால் செய்",
-        "te": "GigKavach కమాండ్లు:\n• STATUS — జోన్ DCI & కవరేజ్\n• RENEW — వచ్చే వారం రెన్యూ\n• SHIFT — పని సమయం అప్డేట్\n• LANG — భాష మార్చు\n• APPEAL — నిర్ణయాన్ని సవాల్ చేయి",
+        "en": "GigKavach Commands:\n• STATUS — Zone DCI & coverage\n• START — Start shift (Enables Monitoring)\n• STOP — End shift (Calculate Bonus)\n• UPI — Update payout ID (e.g. UPI ravi@upi)\n• RENEW — Renew for next week\n• PROFILE — Access dashboard\n• SHIFT — Update working hours\n• LANG — Change language\n• HELP — Show this menu",
+        "kn": "GigKavach ಆಜ್ಞೆಗಳು:\n• STATUS — ಝೋನ್ DCI & ಕವರೇಜ್\n• START — ಶಿಫ್ಟ್ ಪ್ರಾರಂಭಿಸಿ\n• STOP — ಶಿಫ್ಟ್ ನಿಲ್ಲಿಸಿ\n• UPI — ಪಾವತಿ ವಿವರಗಳನ್ನು ನವೀಕರಿಸಿ\n• HELP ಟೈಪ್ ಮಾಡಿ ಎಲ್ಲ ಆಜ್ಞೆಗಳಿಗಾಗಿ.",
+        "hi": "GigKavach कमांड:\n• STATUS — जोन DCI और कवरेज\n• START — शिफ्ट शुरू करें\n• STOP — शिफ्ट बंद करें\n• UPI — पेमेंट आईडी अपडेट करें\n• HELP — मेनू देखें",
+        "ta": "GigKavach கட்டளைகள்:\n• STATUS — மண்டல DCI & அட்டை\n• START — ஷிஃப்ட் தொடங்க\n• STOP — ஷிஃப்ட் நிறுத்த\n• HELP — மெனு பார்க்க",
+        "te": "GigKavach కమాండ్లు:\n• STATUS — జోన్ DCI & కవరేజ్\n• START — షిఫ్ట్ ప్రారంభం\n• STOP — షిఫ్ట్ ముగింపు\n• HELP — మెనూ చూడండి",
     },
 }
 
@@ -152,19 +199,8 @@ MESSAGES: dict[str, dict[str, str]] = {
 # ─── Bot API Configuration ───────────────────────────────────────────────────
 
 def get_bot_api_url() -> str:
-    """Get WhatsApp bot API base URL based on environment"""
-    # Support both localhost and server IP via environment variable
-    bot_url = os.getenv("BOT_API_URL")
-    if bot_url:
-        return bot_url.rstrip("/")
-    
-    # Fallback based on environment
-    if settings.APP_ENV == "production":
-        # TODO: Set BOT_API_URL environment variable in Render dashboard
-        # Format: https://your-whatsapp-bot-deployment.onrender.com or similar
-        # For now, returns localhost (should be configured)
-        return os.getenv("BOT_API_URL", "http://localhost:3001")
-    return "http://localhost:3001"
+    """Get WhatsApp bot API base URL from centralized settings"""
+    return settings.BOT_API_URL or "http://localhost:3001"
 
 
 # ─── Core Send Functions ─────────────────────────────────────────────────────
@@ -176,8 +212,14 @@ def send_whatsapp(to_number: str, message: str) -> str | None:
     Returns message ID on success, None on failure.
     """
     try:
-        # Clean phone number - remove + if present
-        clean_phone = to_number.lstrip("+")
+        # Clean phone number - remove + and spaces if present
+        clean_phone = to_number.replace(" ", "").replace("-", "").lstrip("+")
+        
+        # If no country code, assume India (+91)
+        if len(clean_phone) == 10:
+            clean_phone = f"91{clean_phone}"
+        elif len(clean_phone) == 11 and clean_phone.startswith("0"):
+            clean_phone = f"91{clean_phone[1:]}"
         
         bot_api_url = get_bot_api_url()
         
@@ -261,3 +303,147 @@ def notify_worker(
         sid = send_sms(phone_number, message)
 
     return sid is not None
+
+
+# ─── Async Helpers for Webhooks & Cron ───────────────────────────────────────
+
+async def send_whatsapp_message(phone_number: str, message: str) -> bool:
+    """Async version of send_whatsapp for use in FastAPI routes and webhooks."""
+    try:
+        # Format phone number properly
+        clean_phone = phone_number.replace(" ", "").replace("-", "")
+        clean_phone = clean_phone.lstrip("+")
+        
+        # If no country code, assume India (+91)
+        if len(clean_phone) == 10:
+            clean_phone = f"91{clean_phone}"
+        elif len(clean_phone) == 11 and clean_phone.startswith("0"):
+            clean_phone = f"91{clean_phone[1:]}"
+        
+        bot_api_url = get_bot_api_url()
+        
+        payload = {
+            "phone": clean_phone,
+            "message": message,
+            "messageType": "notification"
+        }
+        
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                f"{bot_api_url}/send-message",
+                json=payload
+            )
+            return response.status_code == 200
+    except Exception as e:
+        logger.error(f"Async WhatsApp failed to {phone_number}: {e}")
+        return False
+
+async def send_settlement_alert(worker_id: str, amount: float, upi_id: str, ref: str, hours: float = 0.0):
+    """
+    Dedicated async helper for the daily settlement engine.
+    Fetches worker language preference and sends the 'payout_sent' template.
+    """
+    from utils.supabase_client import get_supabase
+    sb = get_supabase()
+    
+    # 1. Fetch worker language and phone
+    result = sb.table("workers").select("phone_number, language").eq("id", worker_id).single().execute()
+    if not result.data:
+        logger.error(f"Cannot send settlement alert: Worker {worker_id} not found")
+        return False
+        
+    phone = result.data["phone_number"]
+    lang  = result.data.get("language", "en")
+    
+    # 2. Format and send using notify_worker (which is sync, so we wrap or use async send)
+    # We use notify_worker's logic to get the template
+    return notify_worker(
+        phone_number=phone,
+        message_key="payout_sent",
+        language=lang,
+        amount=amount,
+        upi=upi_id,
+        hours=round(hours, 1),
+        ref=ref
+    )
+
+
+# ─── Judge Demo Mode (Option 1: Real-time Updates) ──────────────────────────
+
+DEMO_MESSAGES = {
+    "start": {
+        "en": "🚀 Judge Demo Initiated\n━━━━━━━━━━━━━━━━━━━━━━\n✅ Admin triggered 5-Factor Test Sequence\n🧑 Test Worker: #49766\n⏰ Time: {timestamp}\n\n📍 Starting in 3... 2... 1...",
+    },
+    "factor_rainfall": {
+        "en": "✅ RAINFALL DISRUPTION TRIGGERED\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n🌧️ DCI Score: {dci} (>65 threshold)\n💰 Payout Amount: ₹{payout}\n📊 Status: PROCESSED\n\n⏳ Next factor in 3 seconds...",
+    },
+    "factor_aqi": {
+        "en": "✅ AQI HEALTH HAZARD TRIGGERED\n━━━━━━━━━━━━━━━━━━━━━━━━━\n🌫️ DCI Score: {dci} (>65 threshold)\n💰 Payout Amount: ₹{payout}\n📊 Status: PROCESSED\n\n⏳ Next factor in 3 seconds...",
+    },
+    "factor_heat": {
+        "en": "✅ EXTREME HEATWAVE TRIGGERED\n━━━━━━━━━━━━━━━━━━━━━━━━\n🔥 DCI Score: {dci} (>65 threshold)\n💰 Payout Amount: ₹{payout}\n📊 Status: PROCESSED\n\n⏳ Next factor in 3 seconds...",
+    },
+    "factor_social": {
+        "en": "✅ SOCIAL DISRUPTION TRIGGERED\n━━━━━━━━━━━━━━━━━━━━━━━━━━\n📢 DCI Score: {dci} (>65 threshold)\n💰 Payout Amount: ₹{payout}\n📊 Status: PROCESSED\n\n⏳ Next factor in 3 seconds...",
+    },
+    "factor_platform": {
+        "en": "✅ PLATFORM SURGE TRIGGERED\n━━━━━━━━━━━━━━━━━━━━━━━━\n📦 DCI Score: {dci} (>65 threshold)\n💰 Payout Amount: ₹{payout}\n📊 Status: PROCESSED\n\n✨ All factors tested successfully!",
+    },
+    "summary": {
+        "en": "🏁 5-FACTOR TEST COMPLETE\n━━━━━━━━━━━━━━━━━━━━━━\n✅ All 5 disruptions triggered successfully\n\n💰 PAYOUTS SUMMARY:\n• 🌧️ Rainfall: ₹500\n• 🌫️ AQI: ₹500\n• 🔥 Heat: ₹500\n• 📢 Social: ₹500\n• 📦 Platform: ₹500\n\n💵 Total Payouts: ₹2,500\n📊 View Dashboard: {dashboard_link}\n\n✨ Demo sequence completed successfully!",
+    }
+}
+
+
+async def send_demo_message(
+    judge_phone: str,
+    message_type: str,
+    factor: str = None,
+    dci: float = None,
+    payout: float = None,
+    dashboard_link: str = "http://localhost:3000/dashboard"
+) -> bool:
+    """
+    Send Judge Console demo messages via WhatsApp.
+    Supports: start, factor_*, summary
+    
+    Args:
+        judge_phone: Judge's phone number
+        message_type: Type of message (start, factor_rainfall, etc., summary)
+        factor: Factor name (rainfall, aqi, heat, social, platform)
+        dci: DCI score for the factor
+        payout: Payout amount for the factor
+        dashboard_link: Link to dashboard for summary
+    
+    Returns:
+        True if sent successfully, False otherwise
+    """
+    try:
+        # Get template
+        if message_type == "factor" and factor:
+            template_key = f"factor_{factor}"
+        else:
+            template_key = message_type
+        
+        if template_key not in DEMO_MESSAGES:
+            logger.warning(f"Demo message template '{template_key}' not found")
+            return False
+        
+        template = DEMO_MESSAGES[template_key]["en"]
+        
+        # Format message
+        from datetime import datetime
+        message = template.format(
+            timestamp=datetime.now().strftime("%Y-%m-%d %H:%M UTC"),
+            dci=int(dci) if dci else 0,
+            payout=int(payout) if payout else 500,
+            dashboard_link=dashboard_link
+        )
+        
+        # Send via bot API
+        return await send_whatsapp_message(judge_phone, message)
+        
+    except Exception as e:
+        logger.error(f"Error sending demo message to {judge_phone}: {e}")
+        return False
+

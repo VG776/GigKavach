@@ -2,33 +2,65 @@
  * Frontend constants and API URLs
  */
 
-const hostname = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
-const port = typeof window !== 'undefined' ? window.location.port : '8000';
+const hostname =
+  typeof window !== "undefined" ? window.location.hostname : "localhost";
+const port = typeof window !== "undefined" ? window.location.port : "";
+
+const normalizeUrl = (value) =>
+  typeof value === "string" ? value.replace(/\/$/, "") : value;
+
+const resolveApiBaseUrl = () => {
+  const configuredBaseUrl =
+    import.meta.env.VITE_API_BASE_URL ||
+    import.meta.env.VITE_API_URL ||
+    import.meta.env.VITE_BACKEND_PROXY_TARGET;
+
+  if (configuredBaseUrl) {
+    return normalizeUrl(configuredBaseUrl);
+  }
+
+  if (typeof window !== "undefined") {
+    const isLocalhost = hostname === "localhost" || hostname === "127.0.0.1";
+    if (isLocalhost) {
+      return "http://localhost:8000";
+    }
+  }
+
+  return "";
+};
+
+const resolveWsBaseUrl = () => {
+  const configuredWsUrl = import.meta.env.VITE_WS_BASE_URL;
+  if (configuredWsUrl) {
+    return normalizeUrl(configuredWsUrl);
+  }
+
+  const apiBaseUrl = resolveApiBaseUrl();
+  if (apiBaseUrl.startsWith("https://")) {
+    return apiBaseUrl.replace(/^https:/, "wss:");
+  }
+  if (apiBaseUrl.startsWith("http://")) {
+    return apiBaseUrl.replace(/^http:/, "ws:");
+  }
+
+  return "";
+};
 
 // Determine API base URL from environment or current location
-const DEFAULT_API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ||
-  import.meta.env.VITE_API_URL ||
-  (typeof window !== 'undefined' && window.location.hostname !== 'localhost' 
-    ? `http://${hostname}:8000`
-    : `http://${hostname}:8000`);
+const DEFAULT_API_BASE_URL = resolveApiBaseUrl();
 
 // Log API configuration for debugging
-if (typeof window !== 'undefined') {
-  console.log('[API_CONFIG]', {
+if (typeof window !== "undefined") {
+  console.log("[API_CONFIG]", {
     hostname,
     port,
     VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
     VITE_API_URL: import.meta.env.VITE_API_URL,
-    resolved: DEFAULT_API_BASE_URL
+    resolved: DEFAULT_API_BASE_URL,
   });
 }
 
-const DEFAULT_WS_BASE_URL =
-  import.meta.env.VITE_WS_BASE_URL ||
-  (typeof window !== 'undefined' && window.location.hostname !== 'localhost'
-    ? `ws://${hostname}:8000`
-    : `ws://${hostname}:8000`);
+const DEFAULT_WS_BASE_URL = resolveWsBaseUrl();
 
 // API Base Configuration
 export const API_CONFIG = {
@@ -59,64 +91,64 @@ export const DCI_CONFIG = {
 // Fraud Configuration
 export const FRAUD_CONFIG = {
   SIGNALS_COUNT: 6,
-  SIGNAL_LABELS: ['GPS', 'IP', 'Velocity', 'Entropy', 'Cluster', 'Loyalty'],
+  SIGNAL_LABELS: ["GPS", "IP", "Velocity", "Entropy", "Cluster", "Loyalty"],
   HIGH_RISK_THRESHOLD: 5,
   MEDIUM_RISK_THRESHOLD: 3,
   LOW_RISK_THRESHOLD: 0,
   TIERS: {
-    1: 'Tier 1',
-    2: 'Tier 2',
-    3: 'Tier 3',
+    1: "Tier 1",
+    2: "Tier 2",
+    3: "Tier 3",
   },
 };
 
 // Payout Configuration
 export const PAYOUT_CONFIG = {
-  STATUS_TYPES: ['paid', 'pending', 'failed', 'escrowed'],
-  PLAN_TIERS: ['Shield Basic', 'Shield Plus', 'Shield Pro'],
+  STATUS_TYPES: ["paid", "pending", "failed", "escrowed"],
+  PLAN_TIERS: ["Shield Basic", "Shield Plus", "Shield Pro"],
   ESCROW_HOLD_PERCENTAGE: 50,
 };
 
 // Color Configuration
 export const COLORS = {
   BRAND: {
-    DARK: '#0F1B2D',
-    DARKER: '#162236',
-    ACCENT: '#FF6B35',
-    SAFE: '#22C55E',
-    WARNING: '#F59E0B',
-    DANGER: '#EF4444',
+    DARK: "#0F1B2D",
+    DARKER: "#162236",
+    ACCENT: "#FF6B35",
+    SAFE: "#22C55E",
+    WARNING: "#F59E0B",
+    DANGER: "#EF4444",
   },
   STATUS: {
-    ACTIVE: '#22C55E',
-    INACTIVE: '#9CA3AF',
-    PAID: '#22C55E',
-    PENDING: '#F59E0B',
-    HIGH_RISK: '#EF4444',
-    MEDIUM_RISK: '#F59E0B',
-    LOW_RISK: '#22C55E',
+    ACTIVE: "#22C55E",
+    INACTIVE: "#9CA3AF",
+    PAID: "#22C55E",
+    PENDING: "#F59E0B",
+    HIGH_RISK: "#EF4444",
+    MEDIUM_RISK: "#F59E0B",
+    LOW_RISK: "#22C55E",
   },
   DCI: {
-    CRITICAL: '#7F1D1D',
-    HIGH: '#EF4444',
-    MEDIUM: '#F59E0B',
-    LOW: '#22C55E',
-    EXCELLENT: '#059669',
+    CRITICAL: "#7F1D1D",
+    HIGH: "#EF4444",
+    MEDIUM: "#F59E0B",
+    LOW: "#22C55E",
+    EXCELLENT: "#059669",
   },
 };
 
 // Route Configuration
 export const ROUTES = {
-  DASHBOARD: '/dashboard',
-  WORKERS: '/workers',
-  WORKERS_DETAIL: '/workers/:id',
-  LIVE_MAP: '/map',
-  PAYOUTS: '/payouts',
-  FRAUD: '/fraud',
-  SETTINGS: '/settings',
-  WORKER_STATUS: '/worker/status',
-  WORKER_HISTORY: '/worker/history',
-  WORKER_PROFILE: '/worker/profile',
+  DASHBOARD: "/dashboard",
+  WORKERS: "/workers",
+  WORKERS_DETAIL: "/workers/:id",
+  LIVE_MAP: "/map",
+  PAYOUTS: "/payouts",
+  FRAUD: "/fraud",
+  SETTINGS: "/settings",
+  WORKER_STATUS: "/worker/status",
+  WORKER_HISTORY: "/worker/history",
+  WORKER_PROFILE: "/worker/profile",
 };
 
 // Pagination Configuration
@@ -130,10 +162,10 @@ export const TOAST_DURATION = 4000; // milliseconds
 
 // Local Storage Keys
 export const STORAGE_KEYS = {
-  THEME: 'gigkavach_theme',
-  USER_PREFERENCES: 'gigkavach_user_prefs',
-  LAST_VIEWED_PAGE: 'gigkavach_last_page',
-  AUTH_TOKEN: 'gigkavach_auth_token',
+  THEME: "gigkavach_theme",
+  USER_PREFERENCES: "gigkavach_user_prefs",
+  LAST_VIEWED_PAGE: "gigkavach_last_page",
+  AUTH_TOKEN: "gigkavach_auth_token",
 };
 
 // Feature Flags
@@ -141,5 +173,5 @@ export const FEATURE_FLAGS = {
   ENABLE_LIVE_MAP: true,
   ENABLE_FORECAST: true,
   ENABLE_SIMULATION: true,
-  ENABLE_SANDBOX_MODE: import.meta.env.VITE_SANDBOX_MODE === 'true',
+  ENABLE_SANDBOX_MODE: import.meta.env.VITE_SANDBOX_MODE === "true",
 };

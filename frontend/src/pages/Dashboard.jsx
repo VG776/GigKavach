@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';import { Users, Zap, IndianRupee, ShieldAlert, TrendingUp, TrendingDown, Clock, CheckCircle2, Clock3, AlertCircle, IndianRupeeIcon } from 'lucide-react';
+import { useState, useEffect } from 'react';import { Users, Zap, IndianRupee, ShieldAlert, TrendingUp, TrendingDown, Clock, CheckCircle2, Clock3, AlertCircle, Gift } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
 import { payoutAPI } from '../api/payouts';
 import { dciAPI } from '../api/dci';
 import { workerAPI } from '../api/workers';
+import { premiumAPI } from '../api/premium';
+import { fraudAPI } from '../api/fraud';
 import { DCIChart } from '../components/dci/DCIChart';
 import { logger } from '../utils/logger';
 
@@ -182,20 +184,23 @@ const sparkline = {
 const [todayPayout, setTodayPayout] = useState(null);
 const [todayDCI, setTodayDCI] = useState(null);
 const [activeWorkers, setActiveWorkers] = useState(null);
+const [fraudAlertsCount, setFraudAlertsCount] = useState(0);
 const [metricsLoading, setMetricsLoading] = useState({
   payout: true,
   dci: true,
   workers: true,
+  fraud: true,
 });
+
+  // Premium Insights State
+  const [premiumInsights, setPremiumInsights] = useState([]);
+  const [premiumLoading, setPremiumLoading] = useState(true);
 
   useEffect(() => {
     const fetchDCI = async () => {
       try {
         const res = await dciAPI.getTodayTotal();
         setTodayDCI(res?.total_dci_today ?? 0);
-      } catch (err) {
-        console.warn('[DCI] Failed to fetch today total:', err.message);
-        setTodayDCI(0);
       } finally {
         setMetricsLoading((prev) => ({ ...prev, dci: false }));
       }
@@ -220,6 +225,22 @@ const [metricsLoading, setMetricsLoading] = useState({
     fetchWorkers();
   }, []);
 
+  useEffect(() => {
+    const fetchFraudAlerts = async () => {
+      try {
+        const res = await fraudAPI.getFraudSummary();
+        setFraudAlertsCount(res?.high_risk_active ?? 0);
+      } catch (err) {
+        console.warn('[FRAUD] Failed to fetch alerts:', err.message);
+        setFraudAlertsCount(0);
+      } finally {
+        setMetricsLoading((prev) => ({ ...prev, fraud: false }));
+      }
+    };
+
+    fetchFraudAlerts();
+  }, []);
+
 
 const statCards = [
   {
@@ -240,16 +261,17 @@ const statCards = [
   key: "payout",
   label: "Today's Payout",
   value: todayPayout,
-  icon: IndianRupeeIcon,
+  icon: IndianRupee,
   color: "green",
   subtitle: "Total payouts processed today"
 },
   {
     key: "fraudAlerts",
     label: "Fraud Alerts Active",
+    value: fraudAlertsCount,
     icon: ShieldAlert,
     color: "red",
-    subtitle: "Pending review · 2 High Risk",
+    subtitle: `Pending review · ${fraudAlertsCount} High Risk`,
   },
 ];
 
@@ -267,6 +289,54 @@ const statCards = [
     };
 
     fetchPayoutTotal();
+  }, []);
+
+  // Fetch Premium Insights (top discounts & bonus hours)
+  useEffect(() => {
+    const fetchPremiumInsights = async () => {
+      // TODO: Premium insights temporarily disabled until worker API returns valid IDs
+      // The workers API may not be returning .id field properly
+      setPremiumLoading(false);
+      // try {
+      //   setPremiumLoading(true);
+      //   // Fetch all workers to calculate premium quotes
+      //   const workersRes = await workerAPI.getAll({ limit: 50 });
+      //   const workers = workersRes?.data || workersRes?.workers || [];
+
+      //   // Get quotes for top 5 workers and calculate insights
+      //   const insights = [];
+      //   for (let i = 0; i < Math.min(5, workers.length); i++) {
+      //     try {
+      //       const worker = workers[i];
+      //       // Skip if worker doesn't have an ID
+      //       if (!worker.id || worker.id.trim() === '') {
+      //         logger.debug('PREMIUM_INSIGHTS', `Worker ${i} has no valid ID, skipping`);
+      //         continue;
+      //       }
+      //       const quote = await premiumAPI.getQuote(worker.id, worker.plan || 'basic');
+      //       insights.push({
+      //         workerId: worker.id,
+      //         workerName: worker.name || 'Unknown',
+      //         discount: quote?.discount_applied || 0,
+      //         bonusHours: quote?.bonus_coverage_hours || 0,
+      //         premium: quote?.dynamic_premium || 0,
+      //         plan: worker.plan || 'basic',
+      //       });
+      //     } catch (err) {
+      //       logger.debug('PREMIUM_INSIGHTS', `Failed to fetch quote for worker ${i}:`, err);
+      //     }
+      //   }
+
+      //   setPremiumInsights(insights);
+      // } catch (err) {
+      //   console.warn('[PREMIUM_INSIGHTS] Failed to fetch:', err.message);
+      //   setPremiumInsights([]);
+      // } finally {
+      //   setPremiumLoading(false);
+      // }
+    };
+
+    fetchPremiumInsights();
   }, []);
 
   const getCardBgColor = (color) => {
@@ -333,11 +403,25 @@ const statCards = [
 
   if (isDashboardLoading) {
     return (
-      <div className="min-h-[65vh] flex items-center justify-center rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gigkavach-surface shadow-sm">
+      <div className="min-h-[70vh] flex items-center justify-center rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-sm">
         <div className="text-center px-6">
-          <div className="mx-auto mb-4 h-11 w-11 rounded-full border-4 border-gray-300/80 dark:border-gray-700 border-t-gigkavach-orange animate-spin" />
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Fetching backend data</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Fetching workers, payouts, and DCI metrics from the backend...</p>
+          <div className="mx-auto mb-6 h-16 w-16 rounded-full border-4 border-gray-300/60 dark:border-gray-700 border-t-blue-500 animate-spin" />
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Loading Dashboard</h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">Fetching workers, payouts, DCI triggers & recent activity from backend...</p>
+          <div className="space-y-2 text-xs text-gray-500 dark:text-gray-500">
+            <div className="flex items-center justify-center gap-2">
+              <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+              <span>Syncing active workers</span>
+            </div>
+            <div className="flex items-center justify-center gap-2">
+              <div className="w-2 h-2 bg-orange-500 rounded-full animate-pulse" style={{animationDelay: '0.2s'}} />
+              <span>Loading recent payouts</span>
+            </div>
+            <div className="flex items-center justify-center gap-2">
+              <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" style={{animationDelay: '0.4s'}} />
+              <span>Fetching DCI alerts</span>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -356,6 +440,7 @@ const liveMetrics = {
   payout: todayPayout,
   dci: todayDCI,
   workers: activeWorkers,
+  fraudAlerts: fraudAlertsCount,
 };
 
 const isMetricLoading = metricsLoading[card.key] ?? false;
@@ -382,7 +467,7 @@ const value = liveMetrics[card.key] ?? metrics[card.key] ?? 0;
         <span className="inline-block h-7 w-20 rounded bg-gray-300/70 dark:bg-gray-700 animate-pulse" aria-label="Loading metric" />
       ) : (
         <>
-          {typeof value === "number" && value > 1000 ? value.toLocaleString() : value}
+          {card.key === 'payout' && typeof value === 'number' ? `₹${value.toLocaleString('en-IN')}` : typeof value === "number" && value > 1000 ? value.toLocaleString() : value}
         </>
       )}
     </p>
@@ -544,6 +629,81 @@ const value = liveMetrics[card.key] ?? metrics[card.key] ?? 0;
 
     </div>
     {/* ↑ END MAIN GRID */}
+
+    {/* PREMIUM INSIGHTS SECTION */}
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Top Discounts */}
+      <div className="bg-white dark:bg-gigkavach-surface rounded-lg border border-gray-200 dark:border-gray-700 p-6 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+            <TrendingDown className="w-5 h-5 text-green-600" />
+            Top Discounts Available
+          </h3>
+        </div>
+        <div className="space-y-3">
+          {premiumLoading ? (
+            <div className="py-8 text-center">
+              <div className="inline-block h-5 w-32 rounded bg-gray-300/70 dark:bg-gray-700 animate-pulse" />
+            </div>
+          ) : premiumInsights.length > 0 ? (
+            premiumInsights
+              .sort((a, b) => b.discount - a.discount)
+              .slice(0, 5)
+              .map((insight, idx) => (
+                <div key={idx} className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-800">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">{insight.workerName}</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">{insight.plan}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-bold text-green-600 dark:text-green-400">{insight.discount}%</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">₹{Math.round(insight.premium)}</p>
+                  </div>
+                </div>
+              ))
+          ) : (
+            <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">No premium data yet</p>
+          )}
+        </div>
+      </div>
+
+      {/* Bonus Hours Granted */}
+      <div className="bg-white dark:bg-gigkavach-surface rounded-lg border border-gray-200 dark:border-gray-700 p-6 shadow-sm">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+            <Gift className="w-5 h-5 text-orange-600" />
+            Bonus Hours Available
+          </h3>
+        </div>
+        <div className="space-y-3">
+          {premiumLoading ? (
+            <div className="py-8 text-center">
+              <div className="inline-block h-5 w-32 rounded bg-gray-300/70 dark:bg-gray-700 animate-pulse" />
+            </div>
+          ) : premiumInsights.length > 0 ? (
+            premiumInsights
+              .filter((i) => i.bonusHours > 0)
+              .sort((a, b) => b.bonusHours - a.bonusHours)
+              .slice(0, 5)
+              .map((insight, idx) => (
+                <div key={idx} className="flex items-center justify-between p-3 bg-orange-50 dark:bg-orange-950/20 rounded-lg border border-orange-200 dark:border-orange-800">
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">{insight.workerName}</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">DCI Triggered Coverage</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-bold text-orange-600 dark:text-orange-400">{insight.bonusHours}h</p>
+                    <p className="text-xs text-gray-600 dark:text-gray-400">Bonus hours</p>
+                  </div>
+                </div>
+              ))
+          ) : (
+            <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">No bonus hours yet</p>
+          )}
+        </div>
+      </div>
+    </div>
+    {/* ↑ END PREMIUM INSIGHTS */}
   </div>
 );
 }

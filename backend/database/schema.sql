@@ -26,7 +26,10 @@ CREATE TABLE IF NOT EXISTS workers (
     coverage_active_from TIMESTAMP WITH TIME ZONE,  -- 24-hr delay for new worker moral hazard prevention
     onboarded_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc', now()),
     is_active BOOLEAN DEFAULT true,
+    is_on_shift BOOLEAN DEFAULT false,
     last_seen_at TIMESTAMP WITH TIME ZONE,
+    rzp_contact_id VARCHAR(100),                    -- RazorpayX Contact ID
+    rzp_fund_account_id VARCHAR(100),               -- RazorpayX Fund Account ID (VPA)
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc', now()),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc', now())
 );
@@ -72,6 +75,10 @@ CREATE TABLE IF NOT EXISTS payouts (
     final_amount NUMERIC(10,2) DEFAULT 0,
     fraud_score DECIMAL(5, 2) DEFAULT 0,
     status VARCHAR(50) DEFAULT 'pending',           -- 'pending'|'processing'|'completed'|'failed'
+    rzp_payout_id VARCHAR(100),                     -- Razorpay payout reference
+    rzp_status VARCHAR(50),                         -- raw razorpay status
+    rzp_failure_reason TEXT,                        -- failure details for worker notification
+    idempotency_key UUID DEFAULT uuid_generate_v4() UNIQUE, -- Prevents double-payouts
     triggered_at TIMESTAMP WITH TIME ZONE NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc', now())
 );
@@ -110,6 +117,9 @@ CREATE TABLE IF NOT EXISTS claims (
     is_fraud BOOLEAN,
     payout_amount NUMERIC(10,2),
     payout_multiplier NUMERIC(5,3),
+    rzp_payout_id VARCHAR(100),                     -- Razorpay Payout ID
+    payout_status VARCHAR(50),                      -- processed, reversed, etc.
+    idempotency_key UUID DEFAULT uuid_generate_v4(), -- Prevent double payments
     processed_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc', now())
 );

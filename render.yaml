@@ -2,46 +2,46 @@ services:
   - type: web
     name: gigkavach-backend
     runtime: python
-    
+
     # Git Configuration
     # TODO: Replace YOUR-GITHUB-USERNAME with your actual GitHub repository owner
     repo: https://github.com/YOUR-GITHUB-USERNAME/DEVTrails
     branch: main
     rootDir: backend
-    
+
     # Build Configuration
     buildCommand: pip install -r requirements.txt
-    
+
     # Start Command
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
-    
+
     # Environment Variables
     envVars:
       - key: APP_ENV
         value: production
       - key: PYTHON_VERSION
         value: 3.11
-      
+
       # Supabase Configuration
       - key: SUPABASE_URL
-        sync: false  # Set manually in Render dashboard
+        sync: false # Set manually in Render dashboard
       - key: SUPABASE_ANON_KEY
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
-      
+
       # Redis (Render Managed)
       # TODO: Create Redis instance in Render dashboard and paste the connection URL here
       # Format: redis://:your-password@your-render-redis-server:port/0
       - key: REDIS_URL
         sync: false
-      
+
       # Razorpay Configuration
       - key: RAZORPAY_KEY_ID
         sync: false
       - key: RAZORPAY_KEY_SECRET
         sync: false
-      
+
       # Weather & Data APIs
       - key: TOMORROW_IO_API_KEY
         sync: false
@@ -49,14 +49,18 @@ services:
         sync: false
       - key: OPENAQ_API_KEY
         sync: false
-      
+
       # Frontend CORS (Vercel URL)
       # TODO: Replace with actual Vercel frontend URL (format: https://gigkavach.vercel.app)
       - key: FRONTEND_PRODUCTION_URL
         value: https://your-vercel-frontend.vercel.app
       - key: FRONTEND_LOCAL_URL
         value: http://localhost:5173
-      
+      - key: WORKER_PWA_URL
+        value: https://your-worker-pwa.vercel.app
+      - key: WORKER_PWA_LOCAL_URL
+        value: http://localhost:4173
+
       # DCI Configuration
       - key: DCI_POLL_INTERVAL_SECONDS
         value: "300"
@@ -64,20 +68,20 @@ services:
         value: "65"
       - key: DCI_CATASTROPHIC_THRESHOLD
         value: "85"
-    
+
     # Resources
-    plan: starter  # Can upgrade to standard for more power
+    plan: starter # Can upgrade to standard for more power
     numInstances: 1
-    
+
     # Disk & Memory
     disk:
       name: gigkavach-data
       mountPath: /data
       sizeGB: 1
-    
+
     # Health Check
     healthCheckPath: /health
     healthCheckInterval: 30
-    
+
     # Timeout & Timeout settings
     maxShutdownDelay: 30

@@ -33,11 +33,11 @@ class TestSettlementEdgeCases(unittest.TestCase):
     # EDGE CASE 1: Settlement Fraud Blocking (Critical Fix)
     # ════════════════════════════════════════════════════════════════════════════
 
-    @patch("cron.settlement_service.get_supabase")
-    @patch("cron.settlement_service.get_active_worker_policies")
-    @patch("cron.settlement_service.get_todays_disruptions")
-    @patch("cron.settlement_service.check_eligibility")
-    @patch("cron.settlement_service.svc_calculate_payout")
+    @patch("utils.supabase_client.get_supabase")
+    @patch("cron.settlement_service._get_active_worker_policies")
+    @patch("cron.settlement_service._get_todays_disruptions")
+    @patch("services.eligibility_service.check_eligibility")
+    @patch("services.payout_service.calculate_payout")
     def test_settlement_blocks_fraudulent_claims(
         self,
         mock_payout,
@@ -102,7 +102,7 @@ class TestSettlementEdgeCases(unittest.TestCase):
     # EDGE CASE 2: Midnight Disruption Split
     # ════════════════════════════════════════════════════════════════════════════
 
-    @patch("cron.settlement_service.get_supabase")
+    @patch("utils.supabase_client.get_supabase")
     def test_midnight_disruption_split(self, mock_get_sb):
         """
         Test disruption that straddles midnight (23:00 one day - 01:00 next day).
@@ -130,7 +130,7 @@ class TestSettlementEdgeCases(unittest.TestCase):
     # EDGE CASE 3: Mixed Claims (Some Fraud, Some Clean)
     # ════════════════════════════════════════════════════════════════════════════
 
-    @patch("cron.settlement_service.get_supabase")
+    @patch("utils.supabase_client.get_supabase")
     def test_mixed_fraud_and_clean_claims(self, mock_get_sb):
         """
         Worker has multiple claims: 1 fraudulent, 2 clean.
@@ -220,7 +220,7 @@ class TestSettlementEdgeCases(unittest.TestCase):
     # EDGE CASE 6: Duplicate Claims (Prevent Double-Payout)
     # ════════════════════════════════════════════════════════════════════════════
 
-    @patch("cron.settlement_service.get_supabase")
+    @patch("utils.supabase_client.get_supabase")
     def test_duplicate_claims_prevention(self, mock_get_sb):
         """
         Worker submits same claim twice (duplicate).
@@ -253,7 +253,7 @@ class TestSettlementEdgeCases(unittest.TestCase):
     # EDGE CASE 7: No Worker Policies
     # ════════════════════════════════════════════════════════════════════════════
 
-    @patch("cron.settlement_service.get_supabase")
+    @patch("utils.supabase_client.get_supabase")
     def test_worker_with_no_policies(self, mock_get_sb):
         """Test worker with no active policies is skipped."""
         mock_sb = MagicMock()
@@ -295,7 +295,7 @@ class TestSettlementEdgeCases(unittest.TestCase):
     # EDGE CASE 9: Fraud Check Fails (Database Error)
     # ════════════════════════════════════════════════════════════════════════════
 
-    @patch("cron.settlement_service.get_supabase")
+    @patch("utils.supabase_client.get_supabase")
     def test_fraud_check_db_error_fallback(self, mock_get_sb):
         """
         Database error during fraud check.

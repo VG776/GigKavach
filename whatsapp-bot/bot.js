@@ -18,8 +18,6 @@ import chalk from 'chalk';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { execSync } from 'child_process';
-import { routeMessage } from './services/message-handler.js';
-import SessionManager from './services/session-manager.js';
 import { messageQueue } from './services/message-queue.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -183,56 +181,48 @@ client.on('ready', () => {
 
 /**
  * Message Handler - Main inbound message processor
+ * FORWARDS TO BACKEND WEBHOOK (Centralized Logic)
  */
 client.on('message', async (msg) => {
   try {
-    // Ignore group messages
-    if (msg.from.endsWith('@g.us')) {
-      log.debug(`Ignoring group message from ${msg.from}`);
-      return;
-    }
+    // Ignore group messages and status broadcasts
+    if (msg.from.endsWith('@g.us') || msg.from === 'status@broadcast') return;
 
-    // Ignore status broadcasts
-    if (msg.from === 'status@broadcast') {
-      log.debug('Ignoring status broadcast');
-      return;
-    }
-
-    // Extract phone and message
-    const phoneWithSuffix = msg.from;
-    const phone = phoneWithSuffix.replace('@c.us', '');
+    const phone = msg.from.replace('@c.us', '');
     const messageBody = msg.body.trim();
 
-    log.message(`Received from ${phone}: "${messageBody.substring(0, 60)}${messageBody.length > 60 ? '...' : ''}"`);
-    console.log(`[MESSAGE_RECEIVED] From: ${phone}, Body: ${messageBody}, Type: ${msg.type}`);
+    log.message(`Received from ${phone}: "${messageBody.substring(0, 40)}..."`);
 
-    // Route message to appropriate handler
-    const response = await routeMessage(phone, messageBody);
-
-    if (response && response.text) {
-      // Send reply
-      await msg.reply(response.text);
-      log.message(`Replied to ${phone}: "${response.text.substring(0, 50)}${response.text.length > 50 ? '...' : ''}"`);
-      console.log(`[MESSAGE_SENT] To: ${phone}, Text: ${response.text.substring(0, 50)}`);
-
-      // Update session if needed
-      if (response.updateSession) {
-        SessionManager.updateSession(phone, response.sessionData);
-        console.log(`[SESSION_UPDATED] Phone: ${phone}, Data:`, response.sessionData);
-      }
-    } else {
-      log.warn(`No response generated for message from ${phone}`);
-    }
-  } catch (error) {
-    log.error(`Message handler error: ${error.message}`);
-    console.error(`[MESSAGE_HANDLER_ERROR]`, error);
+    // ── Forward to Backend Webhook ──────────────────────────────────────────
+    // The Python backend handles state, Redis, and business logic.
+    // It will call our /send-message API to reply.
     try {
-      await msg.reply(
-        '⚠️ Something went wrong. Please try again or contact support.\n\nFor help, send: HELP'
-      );
-    } catch (replyError) {
-      log.error(`Failed to send error reply: ${replyError.message}`);
+      const response = await fetch(`${BACKEND_URL}/api/v1/whatsapp/webhook`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: phone,
+          body: messageBody,
+          timestamp: new Date().toISOString()
+        }),
+      });
+
+      if (!response.ok) {
+        log.error(`Backend webhook failed: ${response.status}`);
+      } else {
+        const data = await response.json().catch(() => ({}));
+        if (data?.reply) {
+          await msg.reply(data.reply);
+          log.debug(`Replied directly to ${phone}`);
+        }
+      }
+    } catch (backendError) {
+      log.error(`Failed to reach backend: ${backendError.message}`);
+      await msg.reply('⚠️ GigKavach backend is temporarily offline. Please try again in a moment.');
     }
+
+  } catch (error) {
+    log.error(`Message processing error: ${error.message}`);
   }
 });
 
@@ -324,11 +314,15 @@ app.post('/broadcast-disruption-alert', async (req, res) => {
 
     for (const phone of worker_phones) {
       try {
-        const phoneFormatted = `${phone}@c.us`;
-        await client.sendMessage(phoneFormatted, baseMessage);
+        await messageQueue.enqueue(phone, baseMessage, {
+          type: 'disruption_broadcast',
+          pincode: pincode,
+          dci: dci_score,
+          severity: severity
+        });
         results.sent.push(phone);
       } catch (error) {
-        log.error(`Failed to send to ${phone}: ${error.message}`);
+        log.error(`Failed to enqueue for ${phone}: ${error.message}`);
         results.failed.push({ phone, error: error.message });
       }
     }
@@ -471,14 +465,10 @@ app.get('/health', (req, res) => {
  * Bot statistics and session info
  */
 app.get('/stats', (req, res) => {
-  const sessions = SessionManager.getAllSessions();
-  const activeSessions = Object.values(sessions).filter((s) => s.status === 'active').length;
   const queueStats = messageQueue.getStats();
-
+  
   return res.json({
     status: 'ok',
-    total_sessions: Object.keys(sessions).length,
-    active_sessions: activeSessions,
     queue: queueStats,
     uptime_seconds: process.uptime(),
     timestamp: new Date().toISOString(),

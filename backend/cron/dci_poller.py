@@ -107,14 +107,42 @@ def _insert_log_to_db(payload: dict) -> None:
             logger.error(f"[DCI POLLER] Failed to insert DCI log into Supabase: {e}")
 
 
-def trigger_claims_pipeline(pincode: str, final_dci: int, dci_data: dict) -> None:
+async def trigger_recovery_alerts(pincode: str, dci_data: dict, final_dci: float) -> None:
+    from api.whatsapp import send_whatsapp_alert
+    sb = get_supabase()
+    result = sb.table("workers").select("id").contains("pin_codes", [pincode]).eq("is_active", True).execute()
+    active_workers_in_zone = [w["id"] for w in (result.data or [])]
+
+    for worker_id in active_workers_in_zone:
+        # Check eligibility and trigger alert
+        logger.debug(f"[RECOVERY ALERT] Notifying worker={worker_id}")
+        await send_whatsapp_alert(worker_id, "dci_recovery", {"pin_code": pincode, "dci": final_dci, "severity": dci_data.get("severity_tier", "normal")})
+
+
+async def trigger_claims_pipeline(pincode: str, dci_data: dict, final_dci: float) -> None:
     """
     Evaluates all workers in the affected zone against the eligibility firewall,
     records valid claims for the claims_trigger pipeline, and fires WhatsApp alerts.
     """
     city = dci_data.get("city", "default")
-    active_workers_in_zone = ["W100", "W101", "W102"]  # Mock; replaced by DB in production
     from api.whatsapp import send_whatsapp_alert
+    from utils.supabase_client import get_supabase
+
+    try:
+        sb = get_supabase()
+        # Query distinct workers who have this pincode in their pin_codes array and are active
+        # Supabase syntax for 'array contains'
+        result = (
+            sb.table("workers")
+            .select("id")
+            .contains("pin_codes", [pincode])
+            .eq("is_active", True)
+            .execute()
+        )
+        active_workers_in_zone = [w["id"] for w in (result.data or [])]
+    except Exception as e:
+        logger.error(f"[CLAIMS PIPELINE] Worker lookup failed for {pincode}: {e}")
+        active_workers_in_zone = []
 
     logger.info(
         f"[CLAIMS PIPELINE] Evaluating {len(active_workers_in_zone)} workers in "
