@@ -94,7 +94,7 @@ def create_share_token_jwt(worker_id: str, token_id: str, expires_at: datetime) 
         "type": "share_token",
     }
     
-    secret = settings.SECRET_KEY or "your-secret-key"
+    secret = settings.APP_SECRET_KEY or "your-secret-key"
     return jwt.encode(payload, secret, algorithm="HS256")
 
 async def verify_share_token_jwt(share_token: str) -> dict:
@@ -103,7 +103,7 @@ async def verify_share_token_jwt(share_token: str) -> dict:
     Returns decoded payload if valid.
     """
     try:
-        secret = settings.SECRET_KEY or "your-secret-key"
+        secret = settings.APP_SECRET_KEY or "your-secret-key"
         payload = jwt.decode(share_token, secret, algorithms=["HS256"])
         
         if payload.get("type") != "share_token":
@@ -181,7 +181,12 @@ async def generate_share_token(
         
         logger.info(f"[SHARE_TOKEN] Generated: {token[:8]}... for worker {request.worker_id}")
         
-        worker_pwa_url = settings.WORKER_PWA_URL or settings.WORKER_PWA_LOCAL_URL or "http://localhost:4173"
+        worker_pwa_url = (
+            settings.WORKER_PWA_URL
+            or settings.WORKER_PWA_LOCAL_URL
+            or settings.get_public_frontend_url()
+            or "http://localhost:4173"
+        )
         share_url = f"{worker_pwa_url}/share/worker/{token}"
         
         return GenerateShareTokenResponse(
