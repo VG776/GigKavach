@@ -960,6 +960,62 @@ async def handle_stop_shift(phone: str, message: str) -> str:
         return "⚠️ Failed to stop shift correctly."
 
 
+async def handle_start_shift(phone: str, body: str) -> str:
+    """Handle START command — worker starting their shift"""
+    try:
+        sb = get_supabase()
+        worker = sb.table("workers").select("id, language").eq("phone", phone).single().execute()
+        if not worker.data:
+            return "❌ Not registered. Reply with JOIN."
+        
+        wid = worker.data["id"]
+        lang = worker.data.get("language", "en")
+        
+        # Update last_seen_at
+        sb.table("workers").update({"last_seen_at": datetime.utcnow().isoformat()}).eq("id", wid).execute()
+        
+        # Generate dashboard link
+        token_data = generate_share_token(wid, expires_in_days=1, max_uses=5, reason="WhatsApp START command")
+        frontend_url = "https://gig-kavach-beryl.vercel.app"
+        share_url = f"{frontend_url}/link/{token_data['token']}/profile"
+        
+        msgs = {
+            "en": share_url,
+            "hi": share_url
+        }
+        return msgs.get(lang, msgs["en"])
+    except Exception as e:
+        logger.error(f"Error in START command for {phone}: {e}")
+        return "⚠️ Error generating dashboard link."
+
+async def handle_stop_shift(phone: str, body: str) -> str:
+    """Handle STOP command — worker ending their shift"""
+    try:
+        sb = get_supabase()
+        worker = sb.table("workers").select("id, language").eq("phone", phone).single().execute()
+        if not worker.data:
+            return "❌ Not registered. Reply with JOIN."
+            
+        wid = worker.data["id"]
+        lang = worker.data.get("language", "en")
+        
+        # Update last_seen_at
+        sb.table("workers").update({"last_seen_at": datetime.utcnow().isoformat()}).eq("id", wid).execute()
+        
+        # Generate history link
+        token_data = generate_share_token(wid, expires_in_days=1, max_uses=5, reason="WhatsApp STOP command")
+        frontend_url = "https://gig-kavach-beryl.vercel.app"
+        share_url = f"{frontend_url}/link/{token_data['token']}/history"
+        
+        msgs = {
+            "en": share_url,
+            "hi": share_url
+        }
+        return msgs.get(lang, msgs["en"])
+    except Exception as e:
+        logger.error(f"Error in STOP command for {phone}: {e}")
+        return "⚠️ Error generating dashboard link."
+
 # ─── Main Router ──────────────────────────────────────────────────────────────
 
 async def route_message(phone: str, body: str) -> str:
@@ -1006,8 +1062,6 @@ async def route_message(phone: str, body: str) -> str:
         return await handle_start_shift(phone, body)
     elif keyword == "STOP":
         return await handle_stop_shift(phone, body)
-    elif keyword == "UPI":
-        return await handle_upi_update(phone, body)
     
     # Check if user is in middle of onboarding
     state = await get_onboarding_state(phone)

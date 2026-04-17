@@ -187,11 +187,11 @@ MESSAGES: dict[str, dict[str, str]] = {
 
     # HELP command
     "help": {
-        "en": "GigKavach Commands:\n• STATUS — Zone DCI & coverage\n• START — Start shift (Enables Monitoring)\n• STOP — End shift (Calculate Bonus)\n• UPI — Update payout ID (e.g. UPI ravi@upi)\n• RENEW — Renew for next week\n• PROFILE — Access dashboard\n• SHIFT — Update working hours\n• LANG — Change language\n• HELP — Show this menu",
-        "kn": "GigKavach ಆಜ್ಞೆಗಳು:\n• STATUS — ಝೋನ್ DCI & ಕವರೇಜ್\n• START — ಶಿಫ್ಟ್ ಪ್ರಾರಂಭಿಸಿ\n• STOP — ಶಿಫ್ಟ್ ನಿಲ್ಲಿಸಿ\n• UPI — ಪಾವತಿ ವಿವರಗಳನ್ನು ನವೀಕರಿಸಿ\n• HELP ಟೈಪ್ ಮಾಡಿ ಎಲ್ಲ ಆಜ್ಞೆಗಳಿಗಾಗಿ.",
-        "hi": "GigKavach कमांड:\n• STATUS — जोन DCI और कवरेज\n• START — शिफ्ट शुरू करें\n• STOP — शिफ्ट बंद करें\n• UPI — पेमेंट आईडी अपडेट करें\n• HELP — मेनू देखें",
-        "ta": "GigKavach கட்டளைகள்:\n• STATUS — மண்டல DCI & அட்டை\n• START — ஷிஃப்ட் தொடங்க\n• STOP — ஷிஃப்ட் நிறுத்த\n• HELP — மெனு பார்க்க",
-        "te": "GigKavach కమాండ్లు:\n• STATUS — జోన్ DCI & కవరేజ్\n• START — షిఫ్ట్ ప్రారంభం\n• STOP — షిఫ్ట్ ముగింపు\n• HELP — మెనూ చూడండి",
+        "en": "GigKavach Commands:\n• START — Begin your shift\n• STOP — End your shift\n• STATUS — Zone DCI & coverage\n• RENEW — Renew for next week\n• SHIFT — Update working hours\n• LANG — Change language\n• APPEAL — Contest a decision\n• HELP — Show this menu",
+        "kn": "GigKavach ಆಜ್ಞೆಗಳು:\n• START — ಶಿಫ್ಟ್ ಪ್ರಾರಂಭಿಸಿ\n• STOP — ಶಿಫ್ಟ್ ಮುಕ್ತಾಯಗೊಳಿಸಿ\n• STATUS — ಝೋನ್ DCI & ಕವರೇಜ್\n• RENEW — ಮುಂದಿನ ವಾರ ನವೀಕರಿಸಿ\n• SHIFT — ಕೆಲಸದ ಸಮಯ ನವೀಕರಿಸಿ\n• LANG — ಭಾಷೆ ಬದಲಿಸಿ\n• APPEAL — ನಿರ್ಧಾರವನ್ನು ಆಕ್ಷೇಪಿಸಿ",
+        "hi": "GigKavach कमांड:\n• START — अपनी शिफ्ट शुरू करें\n• STOP — अपनी शिफ्ट खत्म करें\n• STATUS — जोन DCI और कवरेज\n• RENEW — अगले हफ्ते नवीनीकरण\n• SHIFT — काम का समय बदलें\n• LANG — भाषा बदलें\n• APPEAL — फैसले को चुनौती दें",
+        "ta": "GigKavach கட்டளைகள்:\n• START — உங்கள் ஷிப்ட் தொடங்குங்கள்\n• STOP — ஷிப்ட் முடித்துக்கொள்ளுங்கள்\n• STATUS — மண்டல DCI & அட்டை\n• RENEW — அடுத்த வாரம் புதுப்பிக்க\n• SHIFT — வேலை நேரம் புதுப்பிக்க\n• LANG — மொழி மாற்று\n• APPEAL — முடிவை சவால் செய்",
+        "te": "GigKavach కమాండ్లు:\n• START — మీ షిఫ్ట్ ప్రారంభించండి\n• STOP — మీ షిఫ్ట్ ముగించండి\n• STATUS — జోన్ DCI & కవరేజ్\n• RENEW — వచ్చే వారం రెన్యూ\n• SHIFT — పని సమయం అప్డేట్\n• LANG — భాష మార్చు\n• APPEAL — నిర్ణయాన్ని సవాల్ చేయి",
     },
 }
 
