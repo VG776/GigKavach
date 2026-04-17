@@ -3,6 +3,7 @@
 ---
 
 ## 📋 Table of Contents
+
 1. [🧠 Project Overview](#-1-project-title--description)
 2. [🛠 Tech Stack](#-2-tech-stack)
 3. [🌐 Live Demo (AWS EC2)](#-3-live-demo-aws-ec2)
@@ -25,7 +26,7 @@
 **GigKavach** is an AI-powered parametric income protection platform designed for India's 10M+ gig workers (Zomato/Swiggy partners)...
 
 - **The Problem**: External disruptions (heavy rain, heatwaves, traffic gridlocks) can wipe out 20-30% of a worker's monthly income. Traditional insurance is too slow and complex.
-- **The Solution**: We automatically detect disruption events using a real-time **Disruption Composite Index (DCI)** at the pin-code level. 
+- **The Solution**: We automatically detect disruption events using a real-time **Disruption Composite Index (DCI)** at the pin-code level.
 - **The Magic**: If the DCI crosses a threshold, payouts are calculated via **XGBoost ML** and sent to the worker's UPI by midnight — **zero claims required.**
 
 ---
@@ -33,17 +34,21 @@
 ## 🛠 2. Tech Stack
 
 **Frontend:**
+
 - React 19 (Vite), TypeScript, Tailwind CSS
 - Leaflet.js (Maps), Recharts (Charts)
 
 **Backend (Python):**
+
 - FastAPI, Uvicorn, Pydantic, APScheduler
 - PostgreSQL (psycopg2), Redis (Mock/Caching)
 
 **AI/ML:**
+
 - XGBoost v3 (Adaptive Multiplier), Scikit-learn (Isolation Forest), HuggingFace NLP
 
 **Infrastructure & Integrations:**
+
 - **Cloud**: AWS EC2 (Ubuntu 24.04 LTS)
 - **Messaging**: Twilio (WhatsApp/Node.js)
 - **Payments**: Razorpay (UPI Payouts)
@@ -71,9 +76,11 @@ The entire GigKavach ecosystem is hosted on a unified **AWS EC2 Production Serve
 ## 📸 5. Screenshots
 
 ### 📊 Admin Dashboard
+
 ![Dashboard](./screenshots/dashboard.png)
 
 ### 🗺️ Live Disruption Heatmap
+
 ![Heatmap](./screenshots/heatmap.png)
 
 ---
@@ -87,13 +94,33 @@ The easiest way to launch the **Frontend**, **Backend**, and **WhatsApp Bot** si
 chmod +x startup_suite.sh
 ./startup_suite.sh
 ```
-*Note: This script backgrounds the engines and presents the WhatsApp QR code directly in your terminal for immediate scanning.* 🤳✨
+
+_Note: This script backgrounds the engines and presents the WhatsApp QR code directly in your terminal for immediate scanning._ 🤳✨
+
+### 🐳 Docker Compose Setup (Recommended for Consistent Local Runs)
+
+```bash
+docker compose up --build
+```
+
+Services started:
+
+- Frontend: `http://localhost:3000`
+- Backend: `http://localhost:8000`
+- Worker PWA: `http://localhost:4173`
+- WhatsApp Bot: `http://localhost:3001`
+
+Notes:
+
+- Ensure Docker Desktop is running before the command.
+- WhatsApp bot requires QR login on first run.
 
 ---
 
 ## 🧩 7. Local Setup (Detailed Guide)
 
 ### 🐍 Step 1: Backend (Python/FastAPI)
+
 ```bash
 cd backend
 python -m venv venv
@@ -103,6 +130,7 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
 ### ⚛️ Step 2: Frontend (React)
+
 ```bash
 cd frontend
 npm install
@@ -110,6 +138,7 @@ npm run dev -- --host 0.0.0.0 --port 3000
 ```
 
 ### 📱 Step 3: WhatsApp Bot (Node.js)
+
 ```bash
 cd whatsapp-bot
 npm install
@@ -120,19 +149,21 @@ node bot.js
 
 ## 🧪 8. API Endpoints
 
-| Method | Endpoint | Description |
-| :--- | :--- | :--- |
-| `GET` | `/api/v1/health/` | Liveness health check (System Pulse) |
-| `POST` | `/api/v1/workers/register` | WhatsApp Onboarding endpoint |
-| `GET` | `/api/v1/dci/{pincode}` | Get real-time Disruption Index |
-| `POST` | `/api/v1/payouts/calculate` | XGBoost Payout & Adaptive Multiplier |
-| `POST` | `/api/v1/fraud/check` | ML-based Fraud Detection (XGBoost v3) |
-| `POST` | `/api/v1/demo/trigger` | Trigger manual demo disruption (Judge Mode) |
+| Method | Endpoint                    | Description                                 |
+| :----- | :-------------------------- | :------------------------------------------ |
+| `GET`  | `/api/v1/health/`           | Liveness health check (System Pulse)        |
+| `POST` | `/api/v1/workers/register`  | WhatsApp Onboarding endpoint                |
+| `GET`  | `/api/v1/dci/{pincode}`     | Get real-time Disruption Index              |
+| `POST` | `/api/v1/payouts/calculate` | XGBoost Payout & Adaptive Multiplier        |
+| `POST` | `/api/v1/fraud/check`       | ML-based Fraud Detection (XGBoost v3)       |
+| `POST` | `/api/v1/demo/trigger`      | Trigger manual demo disruption (Judge Mode) |
 
 ---
 
 ## 🏗️ 9. DCI 5-Layer Redundancy
+
 The **Disruption Composite Index (DCI)** is built for zero-downtime:
+
 1. **Layer 1 (Live APIs)**: Direct Tomorrow.io & WAQI polling.
 2. **Layer 2 (Backup Mocks)**: Automatic fallback if primary APIs rate-limit.
 3. **Layer 3 (Social Intelligence)**: NLP extraction from RSS & NDMA feeds.
@@ -143,13 +174,13 @@ The **Disruption Composite Index (DCI)** is built for zero-downtime:
 
 ## ✨ 10. Key Features
 
-| 🎯 | Feature | Description |
-|----|---------|-------------|
-| 🚨 | **DCI Score** | 5-factor risk scoring updated every 300s at pincode-level. |
-| ⚡ | **Zero-Touch Payouts** | Disruption detected → Eligibility verified → Payout automted. |
-| 💰 | **Smart Baseline** | AI-driven 4-week rolling median for fair earnings calculation. |
-| 🧠 | **XGBoost v3 Fraud** | Detects location spoofing & device farming with 31+ features. |
-| 🎮 | **Judge Console** | Simulation panel on dashboard to trigger disruptions in seconds. |
+| 🎯  | Feature                | Description                                                      |
+| --- | ---------------------- | ---------------------------------------------------------------- |
+| 🚨  | **DCI Score**          | 5-factor risk scoring updated every 300s at pincode-level.       |
+| ⚡  | **Zero-Touch Payouts** | Disruption detected → Eligibility verified → Payout automted.    |
+| 💰  | **Smart Baseline**     | AI-driven 4-week rolling median for fair earnings calculation.   |
+| 🧠  | **XGBoost v3 Fraud**   | Detects location spoofing & device farming with 31+ features.    |
+| 🎮  | **Judge Console**      | Simulation panel on dashboard to trigger disruptions in seconds. |
 
 ---
 
@@ -164,6 +195,7 @@ The **Disruption Composite Index (DCI)** is built for zero-downtime:
 ## 👥 12. Team Details
 
 **Team Quadcore:**
+
 - **Varshit**: WhatsApp & API Integration Lead
 - **Vijeth**: Frontend & Dashboard Design
 - **V Saatwik**: ML Models & Fraud Detection Lead

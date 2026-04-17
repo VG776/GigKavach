@@ -55,6 +55,7 @@ async def generate_share_token(worker_id: str, expires_in_days: int = 7, max_use
         logger.error(f"[SHARE_TOKEN_SERVICE] Error generating token: {str(e)}")
         # Provide a fallback mock token if DB fails so the bot flow doesn't break
         frontend_url = settings.get_public_frontend_url()
+        worker_pwa_url = settings.WORKER_PWA_URL or settings.WORKER_PWA_LOCAL_URL or frontend_url
         fallback_token = f"fallback_{secrets.token_urlsafe(8)}"
         fallback_expires = datetime.now(timezone.utc) + timedelta(days=1)
         return {

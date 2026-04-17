@@ -9,6 +9,10 @@ services:
         value: production
       - key: FRONTEND_PRODUCTION_URL
         value: https://gigkavach-delta.vercel.app
+      - key: WORKER_PWA_URL
+        value: https://your-worker-pwa.vercel.app
+      - key: WORKER_PWA_LOCAL_URL
+        value: http://localhost:4173
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_ANON_KEY

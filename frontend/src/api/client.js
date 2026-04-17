@@ -1,35 +1,19 @@
 /**
  * Axios API client with configuration, interceptors, and base setup
  */
-import axios from 'axios';
-import { API_CONFIG, STORAGE_KEYS } from '../utils/constants.js';
+import axios from "axios";
+import { API_CONFIG, STORAGE_KEYS } from "../utils/constants.js";
 
-// Determine the correct backend URL
-const getBackendURL = () => {
-  if (typeof window === 'undefined') return API_CONFIG.BASE_URL;
-  
-  const hostname = window.location.hostname;
-  const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
-  
-  // Always use http://localhost:8000 when developing, or the explicit config
-  if (isLocalhost) {
-    return 'http://localhost:8000';
-  }
-  
-  // For production, use the configured base URL or infer from current host
-  return API_CONFIG.BASE_URL || `http://${hostname}:8000`;
-};
+const backendURL = API_CONFIG.BASE_URL;
 
-const backendURL = getBackendURL();
-
-console.log('[API_CLIENT] Using backend URL:', backendURL);
+console.log("[API_CLIENT] Using backend URL:", backendURL);
 
 // Create axios instance
 const client = axios.create({
   baseURL: backendURL,
   timeout: API_CONFIG.TIMEOUT,
   headers: {
-    'Content-Type': 'application/json',
+    "Content-Type": "application/json",
   },
 });
 
@@ -39,18 +23,18 @@ client.interceptors.request.use(
     // Log the request
     console.log(`[API_REQUEST] ${config.method?.toUpperCase()} ${config.url}`, {
       baseURL: client.defaults.baseURL,
-      fullURL: `${client.defaults.baseURL}${config.url}`
+      fullURL: `${client.defaults.baseURL}${config.url}`,
     });
-    
+
     // The backend endpoints don't require authentication
     // Supabase auth is handled client-side, not on backend
     // So we don't need to add token headers for these endpoints
-    
+
     return config;
   },
   (error) => {
     return Promise.reject(error);
-  }
+  },
 );
 
 // Response interceptor - handle errors with better logging
@@ -58,34 +42,37 @@ client.interceptors.response.use(
   (response) => {
     console.log(`[API_RESPONSE] ${response.config.url}:`, {
       status: response.status,
-      dataKeys: response.data ? Object.keys(response.data) : 'no data'
+      dataKeys: response.data ? Object.keys(response.data) : "no data",
     });
     return response.data;
   },
   (error) => {
-    console.error(`[API_ERROR] ${error.config?.method?.toUpperCase()} ${error.config?.url}:`, {
-      status: error.response?.status,
-      statusText: error.response?.statusText,
-      message: error.message,
-      data: error.response?.data
-    });
-    
+    console.error(
+      `[API_ERROR] ${error.config?.method?.toUpperCase()} ${error.config?.url}:`,
+      {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        message: error.message,
+        data: error.response?.data,
+      },
+    );
+
     if (error.response?.status === 401) {
       // Backend returns 401 - redirect to login
-      console.log('[API_ERROR] Unauthorized - redirecting to login');
+      console.log("[API_ERROR] Unauthorized - redirecting to login");
       localStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
-      window.location.href = '/login';
+      window.location.href = "/login";
     }
-    
+
     // 404s are sometimes expected (API might not have that resource yet)
     if (error.response?.status === 404) {
       console.warn(`[API_ERROR] 404 Not Found: ${error.config?.url}`);
       return Promise.reject(error);
     }
-    
+
     // For other errors, return the data or full error
     return Promise.reject(error.response?.data || error);
-  }
+  },
 );
 
 // Retry wrapper - skip retries for 404s (fallback handles them)
@@ -101,7 +88,9 @@ const withRetry = async (fn, retries = API_CONFIG.RETRY_ATTEMPTS) => {
         throw error;
       }
       if (i < retries - 1) {
-        await new Promise((resolve) => setTimeout(resolve, API_CONFIG.RETRY_DELAY * (i + 1)));
+        await new Promise((resolve) =>
+          setTimeout(resolve, API_CONFIG.RETRY_DELAY * (i + 1)),
+        );
       }
     }
   }
@@ -127,7 +116,8 @@ const apiClient = {
   /**
    * PATCH request
    */
-  patch: (url, data, config) => withRetry(() => client.patch(url, data, config)),
+  patch: (url, data, config) =>
+    withRetry(() => client.patch(url, data, config)),
 
   /**
    * DELETE request
