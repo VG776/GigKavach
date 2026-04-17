@@ -368,6 +368,7 @@ async def run_daily_settlement():
                         worker_id=worker_id,
                         amount=payout_amount,
                         upi_id=worker.get("upi_id", "your UPI"),
+                        hours=duration_hours,
                         ref=rzp_ref,
                     )
                 except Exception as wa_err:

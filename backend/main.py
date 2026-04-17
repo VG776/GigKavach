@@ -39,6 +39,7 @@ from api.premium import router as premium_router
 from api.share_tokens import router as share_tokens_router
 from api.webhooks import router as webhooks_router
 from api.analytics import router as analytics_router
+from api.telemetry import router as telemetry_router
 
 
 # ─── Logging Setup ────────────────────────────────────────────────────────────
@@ -261,6 +262,7 @@ app.include_router(premium_router, prefix="/api/v1")        # Dynamic Premium Mo
 app.include_router(share_tokens_router, prefix="/api/v1")   # Share tokens for PWA links
 app.include_router(webhooks_router, prefix="/api/v1")       # Razorpay Payout Webhooks
 app.include_router(analytics_router, prefix="/api/v1")      # Analytics & Dashboard
+app.include_router(telemetry_router, prefix="/api/v1")      # Behavioral Telemetry Ingestion
 # Dashboard & Monitoring (Standardized to /api/v1)
 
 

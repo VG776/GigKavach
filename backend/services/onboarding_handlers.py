@@ -23,6 +23,7 @@ from utils.redis_client import get_redis
 from utils.db import get_supabase
 from .whatsapp_service import notify_worker, MESSAGES
 from .share_tokens_service import generate_share_token
+from .gigscore_service import update_gig_score, GigScoreEvent
 
 logger = logging.getLogger("gigkavach.onboarding")
 
@@ -46,6 +47,19 @@ LANGUAGE_MAP = {"1": "en", "2": "kn", "3": "hi", "4": "ta", "5": "te"}
 PLATFORM_MAP = {"1": "zomato", "2": "swiggy"}
 SHIFT_MAP = {"1": "morning", "2": "day", "3": "night", "4": "flexible"}
 PLAN_MAP = {"1": "basic", "2": "plus", "3": "pro"}
+
+
+# ─── Phone Normalization ──────────────────────────────────────────────────────
+
+def normalize_phone(phone: str) -> str:
+    """Standardizes phone numbers to E.164 format for safe DB/Redis lookups."""
+    phone = phone.strip().replace(" ", "")
+    if not phone.startswith('+'):
+        if len(phone) == 10:
+            phone = "+91" + phone
+        else:
+            phone = "+" + phone
+    return phone
 
 
 # ─── Redis Helpers ────────────────────────────────────────────────────────────
@@ -87,6 +101,22 @@ async def clear_onboarding_state(phone: str) -> bool:
 
 
 # ─── Handler Functions ────────────────────────────────────────────────────────
+
+async def _generate_dashboard_url(phone: str) -> str:
+    """Helper to generate a secure, tokenized dashboard URL for a worker."""
+    try:
+        sb = get_supabase()
+        result = sb.table("workers").select("id").eq("phone", phone).execute()
+        if not result.data: return "{FRONTEND_URL}/status"
+        
+        worker_id = result.data[0]["id"]
+        token_data = await generate_share_token(worker_id, expires_in_days=7, reason="Onboarding Summary")
+        return token_data["share_url"]
+    except Exception as e:
+        logger.error(f"Error generating dashboard URL: {e}")
+        from config.settings import settings
+        return f"{settings.FRONTEND_URL}/status"
+
 
 async def handle_join(phone: str, message: str) -> str:
     """
@@ -301,12 +331,67 @@ async def handle_plan_selection(phone: str, message: str, state: dict) -> str:
         # Clear onboarding state
         await clear_onboarding_state(phone)
         
-        logger.info(f"✅ Worker {phone} onboarded successfully with plan {plan}")
-        return MESSAGES["onboarding_complete"][lang].format(plan=f"Shield {'Basic' if plan == 'basic' else 'Plus' if plan == 'plus' else 'Pro'}")
+        # ── Trinity Loop: High-Fidelity Welcome ──────────────────────────────
+        try:
+            from services.premium_service import compute_dynamic_quote
+            quote_data = await compute_dynamic_quote(worker_id, plan)
+            premium = quote_data["dynamic_premium"]
+            dashboard_url = await _generate_dashboard_url(phone)
+            
+            summary = MESSAGES["onboarding_summary"][lang].format(
+                plan=f"Shield {plan.capitalize()}",
+                premium=f"{premium:.2f}",
+                profile_url=dashboard_url
+            )
+            logger.info(f"✅ Worker {phone} onboarded with high-fidelity summary.")
+            return summary
+        except Exception as e:
+            logger.error(f"Failed to generate high-fidelity summary: {e}")
+            return MESSAGES["onboarding_complete"][lang].format(plan=f"Shield {plan.capitalize()}")
         
     except Exception as e:
         logger.error(f"Error completing onboarding for {phone}: {e}")
         return f"⚠️ Error during registration: {str(e)}"
+
+async def handle_upi_update(phone: str, message: str) -> str:
+    """
+    UPI command — Update payout ID after onboarding.
+    Usage: UPI ravi@upi
+    """
+    try:
+        sb = get_supabase()
+        worker_response = sb.table("workers").select("*").eq("phone", phone).execute()
+        if not worker_response.data:
+            return "❌ Not registered yet. Reply with JOIN to start."
+            
+        worker = worker_response.data[0]
+        lang = worker.get("language", "en")
+        
+        # Parse UPI ID from message
+        parts = message.strip().split()
+        if len(parts) < 2:
+            return f"❌ Usage: *UPI your-id@bank*. Current: {worker.get('upi_id', 'None')}"
+            
+        new_upi = parts[1]
+        if "@" not in new_upi:
+            return "❌ Invalid UPI format. Please use format like 'ravi@upi'."
+            
+        # Update Supabase
+        sb.table("workers").update({"upi_id": new_upi}).eq("id", worker["id"]).execute()
+        
+        # Award micro-boost for maintaining accurate profile (+0.5 pts)
+        update_gig_score(worker["id"], GigScoreEvent.CLEAN_SHIFT) # Reusing clean shift boost for record maintenance
+        
+        msgs = {
+            "en": f"✅ Payout ID updated! Your new UPI is *{new_upi}*.",
+            "hi": f"✅ भुगतान आईडी अपडेट की गई! आपका नया UPI *{new_upi}* है।",
+            "kn": f"✅ ಪಾವತಿ ವಿವರಗಳನ್ನು ನವೀಕರಿಸಲಾಗಿದೆ! ನಿಮ್ಮ ಹೊಸ UPI *{new_upi}*.",
+        }
+        return msgs.get(lang, msgs["en"])
+        
+    except Exception as e:
+        logger.error(f"Error in UPI update for {phone}: {e}")
+        return "⚠️ Update failed. Please try again."
 
 
 async def handle_status(phone: str, message: str) -> str:
@@ -322,7 +407,6 @@ async def handle_status(phone: str, message: str) -> str:
             return "❌ Not registered yet. Reply with JOIN to start."
         
         worker = worker_response.data[0]
-        lang = worker.get("language", "en")
         
         # Get active policy
         policy_response = (
@@ -336,48 +420,46 @@ async def handle_status(phone: str, message: str) -> str:
         policy = policy_response.data[0] if policy_response.data else None
         plan = policy.get("plan") if policy else worker.get("plan", "unknown")
         pin_codes = worker.get("pin_codes", []) or []
-        pin_code = pin_codes[0] if pin_codes else "N/A"
-
-        # ── Real-time DCI lookup ──────────────────────────────────────────────
-        # Priority: Redis cache (updated every 5 min by DCI poller) →
-        #           Supabase dci_logs (last persisted reading) →
-        #           Safe display fallback
-        dci_score = 0
-        severity = "none"
-
+        
+        # ── Trinity Loop: Dynamic Premium ─────────────────────────────────────
+        display_premium = "N/A"
         try:
-            from utils.redis_client import get_dci_cache
-            if pin_code != "N/A":
-                cached_dci = await get_dci_cache(pin_code)
-                if cached_dci and "dci_score" in cached_dci:
-                    dci_score = int(cached_dci["dci_score"])
-                    severity = cached_dci.get("severity_tier", "none")
-                else:
-                    # Fallback to most recent dci_logs entry
-                    dci_result = (
-                        sb.table("dci_logs")
-                        .select("total_score, severity_tier")
-                        .eq("pincode", pin_code)
-                        .order("created_at", desc=True)
-                        .limit(1)
-                        .execute()
-                    )
-                    if dci_result.data:
-                        row = dci_result.data[0]
-                        dci_score = int(row.get("total_score", 0))
-                        severity = row.get("severity_tier", "none")
-        except Exception as dci_err:
-            logger.warning(f"Real-time DCI fetch failed for STATUS ({phone}): {dci_err}")
-            dci_score = 0
-            severity = "unknown"
+            from services.premium_service import compute_dynamic_quote
+            quote_data = await compute_dynamic_quote(worker["id"], plan)
+            p = quote_data["dynamic_premium"]
+            display_premium = f"₹{p:.2f}"
+        except Exception as e:
+            logger.error(f"Failed to compute dynamic premium for STATUS: {e}")
 
-        return MESSAGES["status_response"][lang].format(
-            pin_code=pin_code,
-            dci=dci_score,
-            severity=severity,
-            plan=f"Shield {'Basic' if plan == 'basic' else 'Plus' if plan == 'plus' else 'Pro'}",
-            shift=worker.get("shift", "N/A").title()
-        )
+        # ── Real-time Multi-Zone DCI lookup ───────────────────────────────────
+        from utils.redis_client import get_dci_cache
+        
+        zone_reports = []
+        for pc in pin_codes:
+            d_score = 0
+            d_sev = "none"
+            try:
+                cached = await get_dci_cache(pc)
+                if cached and "dci_score" in cached:
+                    d_score = int(cached["dci_score"])
+                    d_sev = cached.get("severity_tier", "none")
+                else:
+                    d_res = sb.table("dci_logs").select("total_score, severity_tier").eq("pincode", pc).order("created_at", desc=True).limit(1).execute()
+                    if d_res.data:
+                        d_score = int(d_res.data[0].get("total_score", 0))
+                        d_sev = d_res.data[0].get("severity_tier", "none")
+            except: pass
+            
+            icon = "✅" if d_score < 40 else "⚠️" if d_score < 70 else "🚨"
+            zone_reports.append(f"{icon} {pc}: DCI {d_score} ({d_sev.capitalize()})")
+
+        if not zone_reports:
+            zone_reports = ["No zones registered."]
+
+        header = f"📊 *GigKavach Multi-Zone Status*\nWorker: {phone}\nPlan: Shield {plan.title()}\nPremium: {display_premium}\n\n"
+        footer = f"\nShift: {worker.get('shift', 'N/A').title()}\nType HELP for all commands."
+        
+        return header + "\n".join(zone_reports) + footer
 
         
     except Exception as e:
@@ -414,7 +496,6 @@ async def handle_renew(phone: str, message: str) -> str:
         sb.table("policies").insert(policy_data).execute()
         
         # INTEGRATION: Clean Renewal Boost (+2 pts)
-        from services.gigscore_service import update_gig_score, GigScoreEvent
         update_gig_score(worker["id"], GigScoreEvent.CLEAN_RENEWAL)
         
         messages = {
@@ -587,10 +668,9 @@ async def handle_profile(phone: str, message: str) -> str:
         lang = worker.data.get("language", "en")
         
         # Generate token (valid for 7 days)
-        token_data = generate_share_token(wid, expires_in_days=7, max_uses=50, reason="WhatsApp PROFILE command")
+        token_data = await generate_share_token(wid, expires_in_days=7, max_uses=50, reason="WhatsApp PROFILE command")
         
-        frontend_url = "https://gig-kavach-beryl.vercel.app" # Production URL
-        share_url = f"{frontend_url}/link/{token_data['token']}/profile"
+        share_url = token_data['share_url']
         
         msgs = {
             "en": f"📱 *Your GigKavach Profile*\n\nView your GigScore, zone info, and premium details:\n\n{share_url}\n\n⏰ Link expires in 7 days.",
@@ -630,6 +710,99 @@ async def handle_history(phone: str, message: str) -> str:
     except Exception as e:
         logger.error(f"Error in HISTORY for {phone}: {e}")
         return "⚠️ Error generating history link."
+    
+
+async def handle_start_shift(phone: str, message: str) -> str:
+    """
+    START command — Begin delivery shift and enable location monitoring.
+    """
+    try:
+        sb = get_supabase()
+        worker_response = sb.table("workers").select("id, language, is_active").eq("phone", phone).execute()
+        
+        if not worker_response.data:
+            return "❌ Not registered yet. Reply with JOIN to start."
+            
+        worker = worker_response.data[0]
+        if not worker.get("is_active"):
+            return "⚠️ Your account is suspended. Please use APPEAL to contest."
+            
+        worker_id = worker["id"]
+        lang = worker.get("language", "en")
+        
+        # 1. Update Supabase status
+        sb.table("workers").update({"is_working": True, "last_seen_at": datetime.now().isoformat()}).eq("id", worker_id).execute()
+        
+        # 2. Persist start time in Redis for duration calculation and telemetry gating
+        rc = await get_redis()
+        # Standardized key for telemetry receiver sync
+        shift_key = f"shift_active:{worker_id}"
+        await rc.set(shift_key, datetime.now().isoformat())
+        await rc.expire(shift_key, 43200) # 12h max shift
+        
+        logger.info(f"🚀 Shift STARTED for {phone} (ID: {worker_id})")
+        
+        # Add PWA link for real-time monitoring view
+        token_data = await generate_share_token(worker_id, expires_in_days=1, max_uses=5, reason="Shift Start")
+        share_url = token_data['share_url']
+        
+        base_msg = MESSAGES["shift_started"][lang]
+        return f"{base_msg}\n\n📊 *Live Dashboard:*\n{share_url}"
+        
+    except Exception as e:
+        logger.error(f"Error starting shift for {phone}: {e}")
+        return "⚠️ Failed to start shift. Please try again."
+
+async def handle_stop_shift(phone: str, message: str) -> str:
+    """
+    STOP command — End delivery shift, pause monitoring, and award micro-boost.
+    """
+    try:
+        sb = get_supabase()
+        worker_response = sb.table("workers").select("id, language").eq("phone", phone).execute()
+        
+        if not worker_response.data:
+            return "❌ Not registered."
+            
+        worker = worker_response.data[0]
+        worker_id = worker["id"]
+        lang = worker.get("language", "en")
+        
+        # 1. Update Supabase
+        sb.table("workers").update({"is_working": False, "last_seen_at": datetime.now().isoformat()}).eq("id", worker_id).execute()
+        
+        # 2. Calculate duration from Redis
+        rc = await get_redis()
+        shift_key = f"shift_active:{phone}"
+        start_time_str = await rc.get(shift_key)
+        
+        duration_str = "Unknown"
+        if start_time_str:
+            start_time = datetime.fromisoformat(start_time_str)
+            duration = datetime.now() - start_time
+            hours, remainder = divmod(duration.seconds, 3600)
+            minutes, _ = divmod(remainder, 60)
+            duration_str = f"{hours}h {minutes}m"
+            
+            # Use worker_id for standardized telemetry cleanup
+            shift_key = f"shift_active:{worker_id}"
+            await rc.delete(shift_key)
+            
+            # 3. Award Clean Shift micro-boost (+0.5 trust points)
+            # In a real system, we'd check if any fraud flags were raised during this window.
+            update_gig_score(worker_id, GigScoreEvent.CLEAN_SHIFT)
+            
+        # Add PWA link for post-shift review
+        token_data = await generate_share_token(worker_id, expires_in_days=1, max_uses=5, reason="Shift Stop")
+        share_url = token_data['share_url']
+        
+        logger.info(f"⏹️ Shift STOPPED for {phone} (Duration: {duration_str})")
+        base_msg = MESSAGES["shift_stopped"][lang].format(duration=duration_str)
+        return f"{base_msg}\n\n💹 *Check GigScore Rewards:*\n{share_url}"
+        
+    except Exception as e:
+        logger.error(f"Error stopping shift for {phone}: {e}")
+        return "⚠️ Failed to stop shift correctly."
 
 
 # ─── Main Router ──────────────────────────────────────────────────────────────
@@ -659,6 +832,12 @@ async def route_message(phone: str, body: str) -> str:
         return await handle_profile(phone, body)
     elif keyword == "HISTORY":
         return await handle_history(phone, body)
+    elif keyword == "START":
+        return await handle_start_shift(phone, body)
+    elif keyword == "STOP":
+        return await handle_stop_shift(phone, body)
+    elif keyword == "UPI":
+        return await handle_upi_update(phone, body)
     
     # Check if user is in middle of onboarding
     state = await get_onboarding_state(phone)

@@ -131,7 +131,7 @@ async def check_fraud_endpoint(request: FraudCheckRequest):
         )
         
         # Call fraud detection service
-        result = check_fraud(
+        result = await check_fraud(
             claim=claim_dict,
             worker_history=worker_history_dict,
             user_context=request.user_context,
