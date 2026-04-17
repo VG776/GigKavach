@@ -98,7 +98,7 @@ export function WorkerProfile() {
               <div className="w-20 h-20 rounded-full bg-white/20 flex items-center justify-center text-4xl font-bold">
                 {profile.name
                   ?.split(' ')
-                  .map((n) => n[0])
+                  .map((n: string) => n[0])
                   .join('')
                   .slice(0, 2)
                   .toUpperCase() || '?'}
@@ -161,7 +161,7 @@ export function WorkerProfile() {
                 Service Areas
               </h3>
               <div className="flex flex-wrap gap-2">
-                {profile.pin_codes?.map((pin) => (
+                {profile.pin_codes?.map((pin: string) => (
                   <span
                     key={pin}
                     className="bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 px-3 py-1 rounded-full text-sm font-medium"
@@ -185,7 +185,9 @@ export function WorkerProfile() {
             <PremiumQuote
               workerId={profile.id}
               selectedPlan={selectedPlan}
-              onPlanChange={(plan: string) => setSelectedPlan(plan)}
+              onPlanChange={(plan: string) => {
+                setSelectedPlan(plan);
+              }}
             />
           )}
         </div>
