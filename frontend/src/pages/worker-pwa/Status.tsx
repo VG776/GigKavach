@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
-import { ArrowLeft, AlertTriangle, Zap, Cloud, Wind, TrendingUp, Loader2, MapPin } from 'lucide-react';
+import { useEffect, useState, useRef } from 'react';
+import { ArrowLeft, AlertTriangle, Zap, Cloud, Wind, TrendingUp, Loader2, Play, Square, ShieldCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { dciAPI } from '../../api/dci';
+import { workerAPI } from '../../api/workers';
+import { telemetryAPI } from '../../api/telemetry';
 
 /**
  * Worker Status Page (PWA)
@@ -12,6 +14,50 @@ export function WorkerStatus() {
   const [dciData, setDciData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [isOnShift, setIsOnShift] = useState(localStorage.getItem('isOnShift') === 'true');
+  const watchId = useRef(null);
+
+  const workerId = localStorage.getItem('workerId') || 'f47ac10b-58cc-4372-a567-0e02b2c3d479';
+
+  // --- Shift Control Logic ---
+  const handleToggleShift = async () => {
+    try {
+      const newStatus = !isOnShift;
+      await workerAPI.updateShiftStatus(workerId, newStatus);
+      setIsOnShift(newStatus);
+      localStorage.setItem('isOnShift', newStatus.toString());
+      
+      if (!newStatus && watchId.current) {
+        navigator.geolocation.clearWatch(watchId.current);
+        watchId.current = null;
+      }
+    } catch (err) {
+      console.error('[SHIFT_CONTROL] Error:', err);
+      alert('Failed to update shift status. Please try again.');
+    }
+  };
+
+  // --- Telemetry Engine ---
+  useEffect(() => {
+    if (isOnShift && navigator.geolocation) {
+      console.log('[TELEMETRY] Starting real-time tracking...');
+      watchId.current = navigator.geolocation.watchPosition(
+        (pos) => {
+          telemetryAPI.submit(
+            workerId,
+            [pos.coords.latitude, pos.coords.longitude],
+            pos.coords.speed || 0
+          ).catch(e => console.error('[TELEMETRY] Submission error:', e));
+        },
+        (err) => console.error('[TELEMETRY] Position error:', err),
+        { enableHighAccuracy: true, maximumAge: 30000, timeout: 27000 }
+      );
+    }
+
+    return () => {
+      if (watchId.current) navigator.geolocation.clearWatch(watchId.current);
+    };
+  }, [isOnShift, workerId]);
 
   // Fetch DCI data for worker's primary zone
   useEffect(() => {
@@ -100,6 +146,48 @@ export function WorkerStatus() {
       <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
         {dciData ? (
           <>
+            {/* Shift Control Cards */}
+            <div className="grid grid-cols-1 gap-4">
+              <div className={`rounded-xl p-5 border-2 transition-all flex items-center justify-between ${
+                isOnShift 
+                  ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800' 
+                  : 'bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700'
+              }`}>
+                <div className="flex items-center gap-4">
+                  <div className={`p-3 rounded-lg ${isOnShift ? 'bg-green-100 dark:bg-green-800' : 'bg-gray-100 dark:bg-gray-700'}`}>
+                    <ShieldCheck className={`w-6 h-6 ${isOnShift ? 'text-green-600 dark:text-green-400' : 'text-gray-400'}`} />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-gray-900 dark:text-white">
+                      {isOnShift ? 'Shift Active' : 'Off Duty'}
+                    </h4>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {isOnShift ? 'Monitoring Enabled' : 'Monitoring Paused'}
+                    </p>
+                  </div>
+                </div>
+                
+                <button
+                  onClick={handleToggleShift}
+                  className={`px-6 py-2 rounded-lg font-bold flex items-center gap-2 transition-all ${
+                    isOnShift
+                      ? 'bg-red-500 hover:bg-red-600 text-white'
+                      : 'bg-gigkavach-orange hover:bg-orange-600 text-white'
+                  }`}
+                >
+                  {isOnShift ? (
+                    <>
+                      <Square className="w-4 h-4" /> Stop Work
+                    </>
+                  ) : (
+                    <>
+                      <Play className="w-4 h-4" /> Start Work
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
             {/* Current DCI Status */}
             <div className={`rounded-2xl shadow-lg overflow-hidden border-2 ${severityInfo.border}`}>
               <div className={`bg-gradient-to-r ${severityInfo.bg} p-8`}>

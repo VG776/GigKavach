@@ -235,7 +235,7 @@ async def _trigger_payment(claim_id: str, worker_id: str, payout_amount: float, 
 
 
 async def _send_whatsapp_alert(worker_id: str, claim_id: str, decision: str, 
-                         payout_amount: float = 0, fraud_score: float = 0):
+                         payout_amount: float = 0, fraud_score: float = 0, **kwargs):
     """
     Send multilingual WhatsApp notification using the unified service.
     """
@@ -257,17 +257,29 @@ async def _send_whatsapp_alert(worker_id: str, claim_id: str, decision: str,
                 message_key="payout_sent",
                 language=lang,
                 amount=payout_amount,
+                hours=kwargs.get("hours", 0),
                 upi=upi,
                 ref=claim_id[:8].upper()
             )
-        elif decision == "REJECTED_FRAUD":
-            # For fraud, we use a generic warning or existing template
+        elif decision == "REJECTED_FRAUD" or decision == "FLAGGED":
+            # For fraud or suspicious activity, we use the professional flagged template
             return await notify_worker(
                 phone_number=phone,
-                message_key="upi_failed", # Re-using failure alert for context
+                message_key="payout_flagged",
                 language=lang,
-                amount=0,
-                upi="Account Flagged"
+                amount=payout_amount or 0,
+                upi=upi
+            )
+        
+        # New: Recovery notification (if handled through this pipeline)
+        elif decision == "RECOVERY":
+            return await notify_worker(
+                phone_number=phone,
+                message_key="dci_recovery",
+                language=lang,
+                pin_code=kwargs.get("pin_code"),
+                dci=kwargs.get("dci"),
+                severity=kwargs.get("severity")
             )
             
         return False
@@ -323,39 +335,44 @@ async def process_single_claim(claim: Dict[str, Any]) -> Dict[str, Any]:
         # ──── 2. Run Fraud Detection ────
         logger.debug(f"[FRAUD CHECK] Running 3-stage pipeline for claim={claim_id}")
         
-        fraud_result = check_fraud(
+        fraud_score, fraud_reasons = await check_fraud(
             claim=fraud_context,
             worker_history=worker_history,
             user_context={"worker_id": worker_id}
         )
         
-        is_fraud = fraud_result.get("is_fraud", False)
-        fraud_score = fraud_result.get("fraud_score", 0.0)
-        fraud_decision = fraud_result.get("decision", "UNCLEAR")
-        fraud_type = fraud_result.get("fraud_type", "clean")
+        # ── High-Fidelity Decision Matrix ──
+        # 1. Catastrophic Fraud (Score >= 90) -> Absolute Rejection
+        # 2. Suspicious Pattern (Score >= threshold) -> Flagged (Manual Review)
+        # 3. Safe (Score < threshold) -> Approved
+        
+        is_fraud = fraud_score >= 90
+        is_flagged = fraud_score >= settings.FRAUD_THRESHOLD and not is_fraud
+        fraud_type = "|".join(fraud_reasons) if fraud_reasons else "clean"
+        fraud_decision = "rejected" if is_fraud else "flagged" if is_flagged else "approved"
         
         logger.info(
             f"[FRAUD RESULT] claim={claim_id} | is_fraud={is_fraud} | "
-            f"score={fraud_score:.3f} | type={fraud_type}"
+            f"is_flagged={is_flagged} | score={fraud_score:.3f} | type={fraud_type}"
         )
         
         # ──── 3. Make Approval Decision ────
-        if is_fraud:
-            # Fraudulent claim → Reject
-            logger.warning(f"[CLAIM REJECTED] claim={claim_id} | reason=FRAUD_DETECTED")
+        if is_fraud or is_flagged:
+            status = "rejected" if is_fraud else "flagged"
+            logger.warning(f"[{status.upper()}] claim={claim_id} | reason={fraud_type}")
             
             _update_claim_status(
                 claim_id=claim_id,
-                status="rejected",
+                status=status,
                 fraud_score=fraud_score,
                 fraud_decision=fraud_decision,
-                is_fraud=True
+                is_fraud=is_fraud
             )
             
             await _send_whatsapp_alert(
                 worker_id=worker_id,
                 claim_id=claim_id,
-                decision="REJECTED_FRAUD",
+                decision="REJECTED_FRAUD" if is_fraud else "FLAGGED",
                 payout_amount=0,
                 fraud_score=fraud_score
             )
@@ -363,8 +380,8 @@ async def process_single_claim(claim: Dict[str, Any]) -> Dict[str, Any]:
             return {
                 "claim_id": claim_id,
                 "worker_id": worker_id,
-                "status": "rejected",
-                "reason": "fraud_detected",
+                "status": status,
+                "reason": "fraud_detected" if is_fraud else "suspicious_activity",
                 "fraud_score": fraud_score,
                 "fraud_type": fraud_type
             }
@@ -416,7 +433,8 @@ async def process_single_claim(claim: Dict[str, Any]) -> Dict[str, Any]:
             claim_id=claim_id,
             decision="APPROVED",
             payout_amount=payout_amount,
-            fraud_score=fraud_score
+            fraud_score=fraud_score,
+            hours=payout_result.get("disruption_hours", claim.get("disruption_duration", 0) / 60)
         )
         
         logger.info(f"[CLAIM APPROVED] claim={claim_id} | payout=₹{payout_amount:.0f}")

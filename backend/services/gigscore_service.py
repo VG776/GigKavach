@@ -20,6 +20,7 @@ class GigScoreEvent(Enum):
     FRAUD_TIER_3 = "fraud_tier_3_blacklist" # Confirmed spoofing syndicate
     ZONE_HOPPING = "zone_hopping"           # Claiming outside registered zones
     THRESHOLD_GAMING = "threshold_gaming"   # Barely triggering DCI repeatedly
+    CLEAN_SHIFT = "clean_shift_completed"   # No fraud flags during active shift
 
     # Positive Reinforcement & Loyalty (Positive)
     CLEAN_RENEWAL = "clean_week_renewal"    # Completed week without fraud flags
@@ -34,6 +35,7 @@ def get_event_impact(event_type: GigScoreEvent) -> float:
         GigScoreEvent.FRAUD_TIER_3: -100.0,  # Blacklist (Drops to 0)
         GigScoreEvent.ZONE_HOPPING: -2.0,    # Minor behavioral inconsistency
         GigScoreEvent.THRESHOLD_GAMING: -3.0,# Minor gaming penalty
+        GigScoreEvent.CLEAN_SHIFT: 0.5,      # Micro-boost for consistent honesty
         GigScoreEvent.CLEAN_RENEWAL: 2.0,    # Slow trust rebuild
         GigScoreEvent.VALID_SEVERE_CLAIM: 5.0, # Validates reliability
         GigScoreEvent.SUCCESSFUL_APPEAL: 15.0, # Complete restoration + bonus (context dependent)

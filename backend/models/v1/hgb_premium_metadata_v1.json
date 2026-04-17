@@ -1,7 +1,7 @@
 {
   "model_name": "GigKavach_Dynamic_Premium_HGB_v1",
   "objective": "poisson",
-  "created_at": "2026-04-13T23:19:39.000516",
+  "created_at": "2026-04-17T12:40:57.590255",
   "features": [
     "worker_gig_score",
     "pincode_30d_avg_dci",

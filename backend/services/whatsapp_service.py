@@ -6,10 +6,6 @@ Handles all outbound messages to workers via whatsapp-web.js bot API.
 All 30 worker-facing messages are stored in MESSAGES dict below in
 5 languages. No runtime translation API is used — all messages are
 pre-translated and stored statically (free, instant, reliable).
-
-Usage:
-    from services.whatsapp_service import notify_worker
-    notify_worker("+919876543210", "disruption_alert", language="hi", dci=74, amount=280)
 """
 
 import httpx
@@ -105,8 +101,35 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "✅ You're already registered! Type STATUS to check coverage.",
         "kn": "✅ ನೀವು ಈಗಾಗಲೇ ನೋಂದಾಯಿತರಾಗಿದ್ದೀರಿ! STATUS ಟೈಪ್ ಮಾಡಿ ಕವರೇಜ್ ಪರಿಶೀಲಿಸಿ.",
         "hi": "✅ आप पहले से पंजीकृत हैं! STATUS टाइप करके कवरेज जांचें।",
-        "ta": "✅ நீங்கள் ஏற்கனவே பதிவுசெய்யப்பட்டுள்ளீர்கள்! STATUS என்று தட்டச்சு செய்து அட்டையை சரிபார்க்கவும்.",
+        "ta": "✅ நீங்கள் ಈಗಾಗಲೇ ನೋಂದಾಯಿತರಾಗಿದ್ದೀರಿ! STATUS ಟೈಪ್ ಮಾಡಿ ಕವರೇಜ್ ಪರಿಶೀಲಿಸಿ.",
         "te": "✅ మీరు ఇప్పటికే నమోదు చేయబడ్డారు! STATUS టైప్ చేసి కవరేజ్ చెక్ చేయండి.",
+    },
+
+    # SHIFT management commands — RESTORED SECTION 10
+    "shift_started": {
+        "en": "🚀 *Shift Started!* Your location is now being monitored for protection. Use STOP to end your shift.",
+        "kn": "🚀 *ಶಿಫ್ಟ್ ಪ್ರಾರಂಭವಾಯಿತು!* ನಿಮ್ಮ ಸ್ಥಳವನ್ನು ಈಗ ಗಮನಿಸಲಾಗುತ್ತಿದೆ. ಶಿಫ್ಟ್ ಕೊನೆಗೊಳಿಸಲು STOP ಬಳಸಿ.",
+        "hi": "🚀 *शिफ्ट शुरू!* अब आपकी लोकेशन को मॉनिटर किया जा रहा है। शिफ्ट खत्म करने के लिए STOP लिखें।",
+        "ta": "🚀 *ஷிஃப்ட் தொடங்கியது!* உங்கள் இருப்பிடம் இப்போது கண்காணிக்கப்படுகிறது. நிறுத்த STOP பயன்படுத்தவும்.",
+        "te": "🚀 *షిఫ్ట్ ప్రారంభమైంది!* మీ లొకేషన్ ఇప్పుడు మానిటర్ చేయబడుతోంది. ఆపడానికి STOP ఉపయోగించండి.",
+    },
+
+    "shift_stopped": {
+        "en": "⏹️ *Shift Ended!* Duration: {duration}. Monitoring paused. Great work today! 🛡️ (+0.5 trust boost)",
+        "kn": "⏹️ *ಶಿಫ್ಟ್ ಕೊನೆಗೊಂಡಿತು!* ಕಾಲಾವಧಿ: {duration}. ಮೇಲ್ವಿಚಾರಣೆ ನಿಲ್ಲಿಸಲಾಗಿದೆ. 🛡️",
+        "hi": "⏹️ *शिफ्ट खत्म!* समय: {duration}। मॉनिटरिंग बंद। अच्छा काम किया! 🛡️",
+        "ta": "⏹️ *ஷிஃப்ட் முடிந்தது!* நேரம்: {duration}. கண்காணிப்பு நிறுத்தப்பட்டது. 🛡️",
+        "te": "⏹️ *షిఫ్ట్ పూర్తయింది!* సమయం: {duration}. మానిటరింగ్ ఆపబడింది. 🛡️",
+    },
+
+    "onboarding_summary": {
+        "en": "🌟 *Welcome to GigKavach!* 🛡️\n\nOnboarding Complete.\nPlan: *{plan}*\nDynamic Premium: *₹{premium}/week*\n\n📊 *Your Personal Dashboard:*\n{profile_url}\n\nStay protected out there!",
+        "hi": "🌟 *GigKavach में आपका स्वागत है!* 🛡️\n\nपंजीकरण पूरा हुआ।\nप्लान: *{plan}*\nप्रीमियम: *₹{premium}/सप्ताह*\n\n📊 *आपका डैशबोर्ड:*\n{profile_url}",
+    },
+
+    "payout_flagged": {
+        "en": "🛡️ *GigKavach Verification Notice*\n\nHello, your payout for today has been flagged for *manual review* due to irregular GPS telemetry. 🛰️\n\nDon't worry! Our team is verifying the data. If valid, ₹{amount} will be credited to {upi} within 48 hours.\n\nYou can contest this by replying *APPEAL*.",
+        "hi": "🛡️ *GigKavach सत्यापन सूचना*\n\nनमस्ते, आज का आपका भुगतान *मैनुअल समीक्षा* के लिए रोक दिया गया है। 🛰️\n\nचिंता न करें! हमारी टीम डेटा की जांच कर रही है। यदि सही पाया गया, तो ₹{amount} 48 घंटों के भीतर आपके UPI {upi} में जमा कर दिया जाएगा।",
     },
 
     # ── Disruption Alerts ────────────────────────────────────────────────────
@@ -114,17 +137,17 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "🚨 Disruption detected in your zone (DCI: {dci}).\nYour coverage is active. Payout will be calculated at end of your shift today.",
         "kn": "🚨 ನಿಮ್ಮ ಝೋನ್‌ನಲ್ಲಿ ಅಡ್ಡಿ ಪತ್ತೆಯಾಗಿದೆ (DCI: {dci}).\nನಿಮ್ಮ ಕವರೇಜ್ ಸಕ್ರಿಯ. ಶಿಫ್ಟ್ ಕೊನೆಯಲ್ಲಿ ಪಾವತಿ ಲೆಕ್ಕ ಹಾಕಲಾಗುವುದು.",
         "hi": "🚨 आपके ज़ोन में बाधा पकड़ी गई (DCI: {dci})।\nआपकी कवरेज एक्टिव है। आज शिफ्ट खत्म होने पर पेमेंट भेजा जाएगा।",
-        "ta": "🚨 உங்கள் மண்டலத்தில் இடையூறு கண்டறியப்பட்டது (DCI: {dci}).\nஉங்கள் அட்டை செயலில் உள்ளது. இன்று உங்கள் ஷிப்ட் முடிவில் கட்டணம் கணக்கிடப்படும்.",
+        "ta": "🚨 ನಿಮ್ಮ ಝೋನ್‌ನಲ್ಲಿ ಅಡ್ಡಿ ಪತ್ತೆಯಾಗಿದೆ (DCI: {dci}).",
         "te": "🚨 మీ జోన్‌లో అంతరాయం గుర్తించబడింది (DCI: {dci}).\nమీ కవరేజ్ యాక్టివ్ గా ఉంది. నేడు మీ షిఫ్ట్ చివరలో పేమెంట్ లెక్కించబడుతుంది.",
     },
 
     # ── Payout Confirmations ─────────────────────────────────────────────────
     "payout_sent": {
-        "en": "💸 ₹{amount} sent to {upi}. Ref: {ref}.\nYour income is protected. 🛡️",
-        "kn": "💸 ₹{amount} {upi} ಗೆ ಕಳುಹಿಸಲಾಗಿದೆ. Ref: {ref}.\nನಿಮ್ಮ ಆದಾಯ ಸುರಕ್ಷಿತ. 🛡️",
-        "hi": "💸 ₹{amount} {upi} में भेज दिया गया। Ref: {ref}.\nआपकी कमाई सुरक्षित है। 🛡️",
-        "ta": "💸 ₹{amount} {upi} க்கு அனுப்பப்பட்டது. Ref: {ref}.\nஉங்கள் வருமானம் பாதுகாக்கப்பட்டுள்ளது. 🛡️",
-        "te": "💸 ₹{amount} {upi} కి పంపబడింది. Ref: {ref}.\nమీ సంపాదన రక్షించబడింది. 🛡️",
+        "en": "💸 ₹{amount} sent to {upi} for *{hours}h* of disruption. Ref: {ref}.\nYour income is protected. 🛡️",
+        "kn": "💸 ₹{amount} ಅನ್ನು {upi} ಗೆ ಕಳುಹಿಸಲಾಗಿದೆ (*{hours}h* ಅಡಚಣೆಗಾಗಿ). Ref: {ref}.\nನಿಮ್ಮ ಆದಾಯ ಸುರಕ್ಷಿತ. 🛡️",
+        "hi": "💸 ₹{amount} {upi} में भेज दिया गया (*{hours}h* की बाधा के लिए)। Ref: {ref}.\nआपकी कमाई सुरक्षित है। 🛡️",
+        "ta": "💸 ₹{amount} {upi} க்கு அனுப்பப்பட்டது (*{hours}h* இடையூறுக்காக). Ref: {ref}.\nஉங்கள் வருமானம் பாதுகாக்கப்பட்டுள்ளது. 🛡️",
+        "te": "💸 ₹{amount} {upi} కి పంపబడింది (*{hours}h* అంతరాయం కోసం). Ref: {ref}.\nమీ సంపాదన రక్షించబడింది. 🛡️",
     },
 
     "payout_processed": {
@@ -140,7 +163,7 @@ MESSAGES: dict[str, dict[str, str]] = {
         "en": "Your payout is processing. Verification active due to signal conditions in your zone. No action needed.\n₹{amount} will arrive today. Remaining balance auto-credits in 48hrs.",
         "kn": "ನಿಮ್ಮ ಪಾವತಿ ಪ್ರಕ್ರಿಯೆಯಲ್ಲಿದೆ. ನಿಮ್ಮ ಝೋನ್‌ನ ಸಿಗ್ನಲ್ ಸ್ಥಿತಿಯಿಂದ ಪರಿಶೀಲನೆ ಸಕ್ರಿಯ. ₹{amount} ಇಂದು ಬರುತ್ತದೆ.",
         "hi": "आपका पेमेंट प्रोसेस हो रहा है। आपके ज़ोन में सिग्नल की स्थिति के कारण वेरिफिकेशन चल रहा है। ₹{amount} आज आएगा।",
-        "ta": "உங்கள் கட்டணம் செயலாக்கப்படுகிறது. சிக்னல் நிலை காரணமாக சரிபார்ப்பு செயலில் உள்ளது. ₹{amount} இன்று வரும்.",
+        "ta": "உங்கள் கட்டணம் செயலாக்கப்படுகிறது. சிக்னல் நிலை காரணமாக சரிபார்ப்பு செயலில் உள்ளது. ₹{amount} ಇಂದು ಬರುತ್ತದೆ.",
         "te": "మీ పేమెంట్ ప్రాసెస్ అవుతోంది. సిగ్నల్ పరిస్థితుల కారణంగా వెరిఫికేషన్ యాక్టివ్ గా ఉంది. ₹{amount} నేడు వస్తుంది.",
     },
 
@@ -155,68 +178,20 @@ MESSAGES: dict[str, dict[str, str]] = {
 
     # STATUS command response
     "status_response": {
-        "en": "📊 Zone {pin_code} Status:\nDCI Score: {dci} ({severity})\nCoverage: {plan} ✅\nShift: {shift}\nType HELP for all commands.",
-        "kn": "📊 ಝೋನ್ {pin_code} ಸ್ಥಿತಿ:\nDCI: {dci} ({severity})\nಕವರೇಜ್: {plan} ✅\nHELP ಟೈಪ್ ಮಾಡಿ ಎಲ್ಲ ಆಜ್ಞೆಗಳಿಗಾಗಿ.",
-        "hi": "📊 ज़ोन {pin_code} की स्थिति:\nDCI: {dci} ({severity})\nकवरेज: {plan} ✅\nसभी कमांड के लिए HELP टाइप करें।",
-        "ta": "📊 மண்டல {pin_code} நிலை:\nDCI: {dci} ({severity})\nகவரேஜ்: {plan} ✅\nHELP என்று தட்டச்சு செய்யுங்கள்.",
-        "te": "📊 జోన్ {pin_code} స్థితి:\nDCI: {dci} ({severity})\nకవరేజ్: {plan} ✅\nHELP టైప్ చేయండి.",
+        "en": "📊 Zone {pin_code} Status:\nDCI Score: {dci} ({severity})\nCoverage: {plan} ✅\nPremium: ₹{premium} (Trust Adjusted)\nShift: {shift}\nType HELP for all commands.",
+        "kn": "📊 ಝೋನ್ {pin_code} ಸ್ಥಿತಿ:\nDCI: {dci} ({severity})\nಕವರೇಜ್: {plan} ✅\nಪ್ರೀಮಿಯಂ: ₹{premium} (Trust Adjusted)\nHELP ಟೈಪ್ ಮಾಡಿ ಎಲ್ಲ ಆಜ್ಞೆಗಳಿಗಾಗಿ.",
+        "hi": "📊 ज़ोन {pin_code} की स्थिति:\nDCI: {dci} ({severity})\nकवरेज: {plan} ✅\nप्रीमियम: ₹{premium} (Trust Adjusted)\nसभी कमांड के लिए HELP टाइप करें।",
+        "ta": "📊 மண்டல {pin_code} நிலை:\nDCI: {dci} ({severity})\nகவரೇಜ್: {plan} ✅\nபிரீமியம்: ₹{premium} (Trust Adjusted)\nHELP என்று தட்டச்சு செய்யுங்கள்.",
+        "te": "📊 జోన్ {pin_code} స్థితి:\nDCI: {dci} ({severity})\nకవరేజ్: {plan} ✅\nప్రీమియం: ₹{premium} (Trust Adjusted)\nHELP టైప్ చేయండి.",
     },
 
     # HELP command
     "help": {
-        "en": "GigKavach Commands:\n• JOIN — Start registration\n• STATUS — Zone DCI & coverage\n• RENEW — Renew for next week\n• SHIFT — Update working hours\n• LANG — Change language\n• APPEAL — Contest a decision\n• HELP — Show this menu",
-        "kn": "GigKavach ಆಜ್ಞೆಗಳು:\n• JOIN — ನೋಂದಣಿ ಆರಂಭಿಸಿ\n• STATUS — ಝೋನ್ DCI & ಕವರೇಜ್\n• RENEW — ಮುಂದಿನ ವಾರ ನವೀಕರಿಸಿ\n• SHIFT — ಕೆಲಸದ ಸಮಯ ನವೀಕರಿಸಿ\n• LANG — ಭಾಷೆ ಬದಲಿಸಿ\n• APPEAL — ನಿರ್ಧಾರವನ್ನು ಆಕ್ಷೇಪಿಸಿ",
-        "hi": "GigKavach कमांड:\n• JOIN — पंजीकरण शुरू करें\n• STATUS — जोन DCI और कवरेज\n• RENEW — अगले हफ्ते नवीनीकरण\n• SHIFT — काम का समय बदलें\n• LANG — भाषा बदलें\n• APPEAL — फैसले को चुनौती दें",
-        "ta": "GigKavach கட்டளைகள்:\n• JOIN — பதிவு செய்ய\n• STATUS — மண்டல DCI & அட்டை\n• RENEW — அடுத்த வாரம் புதுப்பிக்க\n• SHIFT — வேலை நேரம் புதுப்பிக்க\n• LANG — மொழி மாற்று\n• APPEAL — முடிவை சவால் செய்",
-        "te": "GigKavach కమాండ్లు:\n• JOIN — నమోదు ప్రారంభించండి\n• STATUS — జోన్ DCI & కవరేజ్\n• RENEW — వచ్చే వారం రెన్యూ\n• SHIFT — పని సమయం అప్డేట్\n• LANG — భాష మార్చు\n• APPEAL — నిర్ణయాన్ని సవాల్ చేయి",
-    },
-    
-    "ask_gig_score": {
-        "en": "What's your typical gig economy rating?\nExamples: 4.8/5, 4.5, or 90",
-        "kn": "ನಿಮ್ಮ ಗಿಗ್ ಎಕಾನಮಿ ರೇಟಿಂಗ್ ಏನು?\nಉದಾಹರಣೆ: 4.8/5, 4.5, ಅಥವಾ 90",
-        "hi": "आपकी विशिष्ट गिग इकोनॉमी रेटिंग क्या है?\nउदाहरण: 4.8/5, 4.5, या 90",
-        "ta": "உங்கள் வழக்கமான கிக் பொருளாதார மதிப்பீடு என்ன?\nஉதாரணங்கள்: 4.8/5, 4.5, அல்லது 90",
-        "te": "మీ సాధారణ గిగ్ ఎకానమీ రేటింగ్ ఏమిటి?\nఉదాహరణలు: 4.8/5, 4.5, లేదా 90",
-    },
-
-    "ask_deliveries": {
-        "en": "How many deliveries have you completed so far?\nIf you're new, reply 0.",
-        "kn": "ನೀವು ಇದುವರೆಗೆ ಎಷ್ಟು ಡೆಲಿವರಿ ಮಾಡಿದ್ದೀರಿ?\nಹೊಸಬರಾಗಿದ್ದರೆ, 0 ಎಂದು ಉತ್ತರಿಸಿ.",
-        "hi": "आपने अब तक कितनी डिलीवरी पूरी की हैं?\nयदि आप नए हैं, तो 0 उत्तर दें।",
-        "ta": "இதுவரை எத்தனை டெலிவரிகளை முடித்துள்ளீர்கள்?\nநீங்கள் புதியவர் என்றால், 0 எனப் பதிலளிக்கவும்.",
-        "te": "మీరు ఇప్పటి వరకు ఎన్ని డెలివరీలను పూర్తి చేశారు?\nమీరు కొత్త వారైతే, 0 అని సమాధానం ఇవ్వండి.",
-    },
-
-    "portfolio_confirmation": {
-        "en": "👍 Portfolio score set to {score}/100 based on your history.",
-        "kn": "👍 ನಿಮ್ಮ ಇತಿಹಾಸದ ಆಧಾರದ ಮೇಲೆ ಪೋರ್ಟ್‌ಫೋಲಿಯೋ ಸ್ಕೋರ್ {score}/100 ಕ್ಕೆ ಸೆಟ್ ಮಾಡಲಾಗಿದೆ.",
-        "hi": "👍 आपके इतिहास के आधार पर पोर्टफोलियो स्कोर {score}/100 सेट किया गया है।",
-        "ta": "👍 உங்கள் வரலாற்றின் அடிப்படையில் போர்ட்ஃபோலியோ மதிப்பெண் {score}/100 ஆக அமைக்கப்பட்டது.",
-        "te": "👍 మీ చరిత్ర ఆధారంగా పోర్ట్‌ఫోలియో స్కోర్ {score}/100 గా సెట్ చేయబడింది.",
-    },
-
-    "unknown_command": {
-        "en": "⚠️ I didn't understand that. Type HELP for a list of valid commands.",
-        "kn": "⚠️ ನನಗೆ ಅರ್ಥವಾಗಲಿಲ್ಲ. ಚಾಲ್ತಿಯಲ್ಲಿರುವ ಆಜ್ಞೆಗಳಿಗಾಗಿ HELP ಎಂದು ಟೈಪ್ ಮಾಡಿ.",
-        "hi": "⚠️ मुझे यह समझ नहीं आया। मान्य कमांड की सूची के लिए HELP टाइप करें.",
-        "ta": "⚠️ எனக்கு அது புரியவில்லை. சரியான கட்டளைகளின் பட்டியலுக்கு HELP எனத் தட்டச்சு செய்யவும்.",
-        "te": "⚠️ నాకు అది అర్థం కాలేదు. సరైన కమాండ్‌ల కోసం HELP అని టైప్ చేయండి.",
-    },
-    
-    "recommended_for_you": {
-        "en": "🤖 Recommended for you: {plan}",
-        "kn": "🤖 ನಿಮಗಾಗಿ ಶಿಫಾರಸು ಮಾಡಲಾಗಿದೆ: {plan}",
-        "hi": "🤖 आपके लिए अनुशंसित: {plan}",
-        "ta": "🤖 உங்களுக்காக பரிந்துரைக்கப்படுகிறது: {plan}",
-        "te": "🤖 మీ కోసం సిఫార్సు చేయబడింది: {plan}",
-    },
-
-    "shift_ended": {
-        "en": "🛑 Shift ended. You have been clocked out. Stay safe!",
-        "kn": "🛑 ಪಾಳಿ ಮುಕ್ತಾಯವಾಗಿದೆ. ಸುರಕ್ಷಿತವಾಗಿರಿ!",
-        "hi": "🛑 शिफ्ट समाप्त हो गई है। सुरक्षित रहें!",
-        "ta": "🛑 ஷிப்ட் முடிந்தது. பாதுகாப்பாக இருங்கள்!",
-        "te": "🛑 షిఫ్ట్ పూర్తయింది. జాగ్రత్తగా ఉండండి!",
+        "en": "GigKavach Commands:\n• STATUS — Zone DCI & coverage\n• START — Start shift (Enables Monitoring)\n• STOP — End shift (Calculate Bonus)\n• UPI — Update payout ID (e.g. UPI ravi@upi)\n• RENEW — Renew for next week\n• PROFILE — Access dashboard\n• SHIFT — Update working hours\n• LANG — Change language\n• HELP — Show this menu",
+        "kn": "GigKavach ಆಜ್ಞೆಗಳು:\n• STATUS — ಝೋನ್ DCI & ಕವರೇಜ್\n• START — ಶಿಫ್ಟ್ ಪ್ರಾರಂಭಿಸಿ\n• STOP — ಶಿಫ್ಟ್ ನಿಲ್ಲಿಸಿ\n• UPI — ಪಾವತಿ ವಿವರಗಳನ್ನು ನವೀಕರಿಸಿ\n• HELP ಟೈಪ್ ಮಾಡಿ ಎಲ್ಲ ಆಜ್ಞೆಗಳಿಗಾಗಿ.",
+        "hi": "GigKavach कमांड:\n• STATUS — जोन DCI और कवरेज\n• START — शिफ्ट शुरू करें\n• STOP — शिफ्ट बंद करें\n• UPI — पेमेंट आईडी अपडेट करें\n• HELP — मेनू देखें",
+        "ta": "GigKavach கட்டளைகள்:\n• STATUS — மண்டல DCI & அட்டை\n• START — ஷிஃப்ட் தொடங்க\n• STOP — ஷிஃப்ட் நிறுத்த\n• HELP — மெனு பார்க்க",
+        "te": "GigKavach కమాండ్లు:\n• STATUS — జోన్ DCI & కవరేజ్\n• START — షిఫ్ట్ ప్రారంభం\n• STOP — షిఫ్ట్ ముగింపు\n• HELP — మెనూ చూడండి",
     },
 }
 
@@ -348,7 +323,7 @@ async def send_whatsapp_message(phone_number: str, message: str) -> bool:
         logger.error(f"Async WhatsApp failed to {phone_number}: {e}")
         return False
 
-async def send_settlement_alert(worker_id: str, amount: float, upi_id: str, ref: str):
+async def send_settlement_alert(worker_id: str, amount: float, upi_id: str, ref: str, hours: float = 0.0):
     """
     Dedicated async helper for the daily settlement engine.
     Fetches worker language preference and sends the 'payout_sent' template.
@@ -373,5 +348,6 @@ async def send_settlement_alert(worker_id: str, amount: float, upi_id: str, ref:
         language=lang,
         amount=amount,
         upi=upi_id,
+        hours=round(hours, 1),
         ref=ref
     )

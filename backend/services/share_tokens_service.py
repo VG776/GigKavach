@@ -1,13 +1,13 @@
 import logging
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from utils.db import get_supabase
 from config.settings import settings
 
 logger = logging.getLogger("gigkavach.share_tokens_service")
 
-def generate_share_token(worker_id: str, expires_in_days: int = 7, max_uses: Optional[int] = None, reason: str = "whatsapp") -> dict:
+async def generate_share_token(worker_id: str, expires_in_days: int = 7, max_uses: Optional[int] = None, reason: str = "whatsapp") -> dict:
     """
     Generates a PWA share token and stores it in the database.
     """
@@ -20,12 +20,13 @@ def generate_share_token(worker_id: str, expires_in_days: int = 7, max_uses: Opt
             raise ValueError(f"Worker {worker_id} not found")
             
         token = secrets.token_urlsafe(24)
-        expires_at = datetime.utcnow() + timedelta(days=expires_in_days)
+        now = datetime.now(timezone.utc)
+        expires_at = now + timedelta(days=expires_in_days)
         
         share_token_data = {
             "worker_id": worker_id,
             "token": token,
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": now.isoformat(),
             "expires_at": expires_at.isoformat(),
             "is_used": False,
             "use_count": 0,
@@ -55,10 +56,11 @@ def generate_share_token(worker_id: str, expires_in_days: int = 7, max_uses: Opt
         # Provide a fallback mock token if DB fails so the bot flow doesn't break
         worker_pwa_url = settings.WORKER_PWA_URL or settings.WORKER_PWA_LOCAL_URL or "http://localhost:4173"
         fallback_token = f"fallback_{secrets.token_urlsafe(8)}"
+        fallback_expires = datetime.now(timezone.utc) + timedelta(days=1)
         return {
             "share_token": fallback_token,
             "token": fallback_token,
             "share_url": f"{worker_pwa_url}/share/worker/{fallback_token}",
             "worker_id": worker_id,
-            "expires_at": (datetime.utcnow() + timedelta(days=1)).isoformat()
+            "expires_at": fallback_expires.isoformat()
         }

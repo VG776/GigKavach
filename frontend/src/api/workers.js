@@ -29,4 +29,14 @@ export const workerAPI = {
   getActiveWeekCount: () => {
     return apiClient.get('/api/v1/workers/active/week');
   },
+
+  /**
+   * Toggle worker shift status (Start/Stop Work)
+   * PATCH /api/v1/workers/shift-status
+   */
+  updateShiftStatus: (worker_id, is_working) => {
+    return apiClient.patch('/api/v1/workers/shift-status', null, { 
+      params: { worker_id, is_working } 
+    });
+  }
 };
