@@ -230,3 +230,5 @@ export function WorkerStatus() {
     </div>
   );
 }
+
+export default WorkerStatus;

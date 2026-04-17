@@ -7,15 +7,20 @@ to the onboarding state machine.
 """
 
 import logging
-from fastapi import APIRouter, Request, BackgroundTasks
+from fastapi import APIRouter
 from pydantic import BaseModel
 from typing import Optional
 
 from services.onboarding_handlers import route_message
-from services.whatsapp_service import send_whatsapp_message
 
 router = APIRouter(tags=["WhatsApp Integration"])
 logger = logging.getLogger("gigkavach.whatsapp")
+
+
+def normalize_whatsapp_phone(phone: str) -> str:
+    """Normalize phone value to digits-only E.164 style without '+' for stable identity mapping."""
+    digits = "".join(ch for ch in (phone or "") if ch.isdigit())
+    return digits
 
 class WhatsAppWebhookRequest(BaseModel):
     phone: str
@@ -25,14 +30,13 @@ class WhatsAppWebhookRequest(BaseModel):
 
 @router.post("/whatsapp/webhook")
 async def whatsapp_inbound_webhook(
-    req: WhatsAppWebhookRequest,
-    background_tasks: BackgroundTasks
+    req: WhatsAppWebhookRequest
 ):
     """
     Main webhook receiver for the WhatsApp bot.
     Bots on 3001 should send callbacks here.
     """
-    phone = req.phone
+    phone = normalize_whatsapp_phone(req.phone)
     message_body = req.body
     
     logger.info(f"📩 [INBOUND] Message from {phone}: {message_body}")
@@ -41,33 +45,49 @@ async def whatsapp_inbound_webhook(
     try:
         response_text = await route_message(phone, message_body)
         
-        # 2. Send the calculated response back to the worker
-        # We do this in a background task to respond to the bot's webhook immediately (200 OK)
-        if response_text:
-            background_tasks.add_task(send_whatsapp_message, phone, response_text)
-            logger.debug(f"📤 [OUTBOUND RESP] Queued response for {phone}")
-            
-        return {"status": "ok", "delivered": True}
+        # Return response text to the bot so it can reply directly on the same connection.
+        # This avoids failures when backend cannot call back to the bot service URL.
+        return {
+            "status": "ok",
+            "reply": response_text or "",
+            "delivered": bool(response_text),
+        }
         
     except Exception as e:
         logger.error(f"❌ Error in WhatsApp webhook processing: {e}")
         return {"status": "error", "detail": str(e)}
 
 # Keeping the existing sending bridge for backward compatibility with DCI/Settlement
-def send_whatsapp_alert(worker_id: str, message_type: str, context: dict = None):
+async def send_whatsapp_alert(worker_id: str, message_type: str, context: dict = None):
     """
-    Legacy sync outbound bridge (used by some older DCI modules).
-    In modern flows, call services.whatsapp_service.notify_worker directly.
+    Robust outbound bridge for system alerts.
+    Resolves worker phone and language from Supabase dynamically.
     """
     if context is None: context = {}
     from services.whatsapp_service import notify_worker
+    from utils.db import get_supabase
     
-    # Simplified mock-to-real mapping for demo
-    # In production, look up phone from worker_id in DB
-    success = notify_worker(
-        phone_number="+918074725459", # Default demo worker
-        message_key=message_type, 
-        language="en", 
-        **context
-    )
-    return {"status": "sent" if success else "failed"}
+    try:
+        sb = get_supabase()
+        # Fetch worker communication preferences
+        result = sb.table("workers").select("phone, language").eq("id", worker_id).execute()
+        
+        if not result.data:
+            logger.error(f"❌ Alert failed: Worker {worker_id} not found in DB.")
+            return {"status": "failed", "reason": "worker_not_found"}
+            
+        worker = result.data[0]
+        phone = worker.get("phone")
+        lang = worker.get("language", "en")
+        
+        success = await notify_worker(
+            phone_number=phone,
+            message_key=message_type, 
+            language=lang, 
+            **context
+        )
+        return {"status": "sent" if success else "failed"}
+        
+    except Exception as e:
+        logger.error(f"❌ Bridge error alerting worker {worker_id}: {e}")
+        return {"status": "error", "detail": str(e)}

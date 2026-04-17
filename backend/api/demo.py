@@ -24,6 +24,7 @@ from config.city_dci_weights import (
     list_supported_cities,
 )
 from services.dci_engine import calculate_dci, get_severity_tier
+from services.whatsapp_service import send_demo_message
 
 logger = logging.getLogger("gigkavach.demo")
 router = APIRouter(tags=["Judge Demo Mode"])
@@ -56,6 +57,14 @@ class DemoTriggerRequest(BaseModel):
         default=None,
         description="Override pincode for demo (defaults to Bengaluru 560001)"
     )
+
+
+class DemoWhatsAppRequest(BaseModel):
+    phoneNumber: str = Field(description="Judge's WhatsApp phone number (+country code)")
+    messageType: str = Field(description="Type: start, factor, summary")
+    factor: Optional[str] = Field(default=None, description="Factor name: rainfall, aqi, heat, social, platform")
+    dci: Optional[float] = Field(default=None, description="DCI score for factor message")
+    severity: Optional[str] = Field(default=None, description="Severity tier for factor message")
 
 def trigger_disruption_sync(factor: str, score: float, city: str, pincode: str):
     """
@@ -109,10 +118,9 @@ def trigger_disruption_sync(factor: str, score: float, city: str, pincode: str):
     )
 
     try:
-        # Insert into dci_logs with city + weights snapshot
+        # Insert into dci_logs (without city - already all Bangalore)
         sb.table("dci_logs").insert({
             "pincode":              pincode,
-            "city":                 city,
             "total_score":          total_score,
             "rainfall_score":       int(comp_scores["weather"]),
             "aqi_score":            int(comp_scores["aqi"]),
@@ -121,8 +129,6 @@ def trigger_disruption_sync(factor: str, score: float, city: str, pincode: str):
             "platform_score":       int(comp_scores["platform"]),
             "severity_tier":        severity,
             "ndma_override_active": False,
-            "weights_used":         weights,
-            "dominant_risk":        component_key,
         }).execute()
 
         logger.info(f"✅ Demo: Inserted DCI log | DCI={total_score} | city={city} | pincode={pincode}")
@@ -131,10 +137,10 @@ def trigger_disruption_sync(factor: str, score: float, city: str, pincode: str):
         try:
             sb.table("payouts").insert({
                 "worker_id":    DEMO_WORKER_ID,
-                "dci_event_id": None,
                 "final_amount": round(450.0 + (total_score * 2), 2),
-                "status":       "completed",
                 "fraud_score":  0.05,
+                "status":       "completed",
+                "triggered_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             }).execute()
             logger.info(f"✅ Demo: Inserted payout for worker {DEMO_WORKER_ID}")
         except Exception as pe:
@@ -211,3 +217,49 @@ async def trigger_demo_disruption(req: DemoTriggerRequest):
         ),
         "supported_cities": list_supported_cities(),
     }
+
+
+@router.post("/demo/notify-whatsapp")
+async def notify_judge_whatsapp(req: DemoWhatsAppRequest):
+    """
+    Send WhatsApp notification to judge during demo sequence.
+    
+    Supports three message types:
+    - start: Initial notification
+    - factor: Per-factor update (include factor, dci, severity)
+    - summary: Final summary
+    """
+    try:
+        # Calculate payout for factor messages
+        payout = 500  # Default payout per factor
+        if req.messageType == "factor" and req.dci:
+            payout = round(450.0 + (req.dci * 2), 2)
+        
+        success = await send_demo_message(
+            judge_phone=req.phoneNumber,
+            message_type=req.messageType,
+            factor=req.factor,
+            dci=req.dci,
+            payout=payout
+        )
+        
+        if success:
+            logger.info(f"✅ WhatsApp demo notification sent to {req.phoneNumber}")
+            return {
+                "status": "success",
+                "messageType": req.messageType,
+                "recipient": req.phoneNumber,
+                "message": "Notification queued successfully"
+            }
+        else:
+            logger.warning(f"❌ Failed to queue WhatsApp for {req.phoneNumber}")
+            return {
+                "status": "error",
+                "messageType": req.messageType,
+                "recipient": req.phoneNumber,
+                "message": "Failed to queue message (bot may be offline)"
+            }
+    
+    except Exception as e:
+        logger.error(f"WhatsApp notification error: {e}")
+        raise HTTPException(status_code=500, detail=f"WhatsApp error: {str(e)}")

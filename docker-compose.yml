@@ -1,22 +1,63 @@
 services:
   backend:
     build: ./backend
+    container_name: gigkavach-backend
     ports:
       - "8000:8000"
     volumes:
       - ./backend:/app
-    environment:
-      - DATABASE_URL=https://rwzjpuxyaxjymhjkpxrm.supabase.co
+    env_file:
+      - ./backend/.env
 
   frontend:
     build: ./frontend
+    container_name: gigkavach-frontend
     ports:
       - "3000:3000"
     volumes:
       - ./frontend:/app
       - frontend_node_modules:/app/node_modules
+    environment:
+      - VITE_API_URL=http://localhost:8000
+      - VITE_API_BASE_URL=http://localhost:8000
+      - VITE_WS_BASE_URL=ws://localhost:8000
+    depends_on:
+      - backend
+
+  worker-pwa:
+    build: ./worker-pwa
+    container_name: gigkavach-worker-pwa
+    ports:
+      - "4173:4173"
+    volumes:
+      - ./worker-pwa:/app
+      - worker_pwa_node_modules:/app/node_modules
+    environment:
+      - VITE_API_URL=http://localhost:8000
+      - VITE_API_BASE_URL=http://localhost:8000
+    depends_on:
+      - backend
+
+  whatsapp-bot:
+    build: ./whatsapp-bot
+    container_name: gigkavach-whatsapp-bot
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./whatsapp-bot:/app
+      - whatsapp_bot_node_modules:/app/node_modules
+      - whatsapp_bot_sessions:/app/.wwebjs_auth
+    env_file:
+      - ./whatsapp-bot/.env
+    environment:
+      - BACKEND_URL=http://backend:8000
+      - BOT_PORT=3001
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
     depends_on:
       - backend
 
 volumes:
   frontend_node_modules:
+  worker_pwa_node_modules:
+  whatsapp_bot_node_modules:
+  whatsapp_bot_sessions:

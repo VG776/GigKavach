@@ -2,8 +2,6 @@ import { useEffect, useState } from 'react';
 import { ArrowLeft, User, MapPin, DollarSign, Zap, TrendingUp, AlertCircle, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { workerAPI } from '../../api/workers';
-import { premiumAPI } from '../../api/premium';
-import { formatCurrency } from '../../utils/formatters';
 import { PremiumQuote } from '../../components/premium/PremiumQuote';
 
 /**
@@ -12,9 +10,9 @@ import { PremiumQuote } from '../../components/premium/PremiumQuote';
  */
 export function WorkerProfile() {
   const navigate = useNavigate();
-  const [profile, setProfile] = useState(null);
+  const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedPlan, setSelectedPlan] = useState('basic');
+  const [selectedPlan, setSelectedPlan] = useState<string>('basic');
 
   // Fetch worker profile
   useEffect(() => {
@@ -100,7 +98,7 @@ export function WorkerProfile() {
               <div className="w-20 h-20 rounded-full bg-white/20 flex items-center justify-center text-4xl font-bold">
                 {profile.name
                   ?.split(' ')
-                  .map((n) => n[0])
+                  .map((n: string) => n[0])
                   .join('')
                   .slice(0, 2)
                   .toUpperCase() || '?'}
@@ -163,7 +161,7 @@ export function WorkerProfile() {
                 Service Areas
               </h3>
               <div className="flex flex-wrap gap-2">
-                {profile.pin_codes?.map((pin) => (
+                {profile.pin_codes?.map((pin: string) => (
                   <span
                     key={pin}
                     className="bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 px-3 py-1 rounded-full text-sm font-medium"
@@ -187,7 +185,6 @@ export function WorkerProfile() {
             <PremiumQuote
               workerId={profile.id}
               selectedPlan={selectedPlan}
-              onPlanChange={setSelectedPlan}
             />
           )}
         </div>
@@ -211,3 +208,5 @@ export function WorkerProfile() {
     </div>
   );
 }
+
+export default WorkerProfile;

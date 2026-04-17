@@ -7,7 +7,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { Shield, Mail, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -70,11 +70,11 @@ const Login = () => {
 
       <div className="relative z-10 w-full max-w-md px-6">
         {/* Logo Section */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-gigkavach-orange to-orange-600 shadow-2xl shadow-gigkavach-orange/30 mb-6">
-            <Shield className="w-10 h-10 text-white" />
+        <div className="text-center mb-8 font-sans">
+          <div className="inline-flex items-center justify-center w-24 h-24 mb-6">
+            <img src="/logo.png" alt="GigKavach Logo" className="w-full h-full object-contain drop-shadow-2xl brightness-110" />
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">
+          <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">
             GigKavach
           </h1>
           <p className="text-gray-400 text-sm">

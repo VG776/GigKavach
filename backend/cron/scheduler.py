@@ -19,6 +19,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 from cron.dci_poller import process_zone
 from cron.claims_trigger import trigger_claims_pipeline
+from cron.settlement_service import run_daily_settlement
 from cron.rss_parser import parse_feeds
 from config.settings import settings
 
@@ -84,7 +85,21 @@ def configure_scheduler():
     )
     
     # ──────────────────────────────────────────────────────────────────────────
-    # 4. DCI Historical Archival (daily at 2 AM UTC)
+    # 4. Daily Settlement & Payout Notification (11:55 PM)
+    # ──────────────────────────────────────────────────────────────────────────
+    logger.info("[SCHEDULER] Registering: Daily Settlement (11:55 PM)")
+    scheduler.add_job(
+        # We use CronTrigger for the specific 11:55 PM requirement
+        func=settlement_job_scheduled,
+        trigger=CronTrigger(hour=23, minute=55),
+        id="daily_settlement",
+        name="Daily Settlement & Payout Notification",
+        replace_existing=True,
+        misfire_grace_time=3600,
+    )
+    
+    # ──────────────────────────────────────────────────────────────────────────
+    # 5. DCI Historical Archival (daily at 2 AM UTC)
     # ──────────────────────────────────────────────────────────────────────────
     logger.info("[SCHEDULER] Registering: DCI History Archive (daily 2 AM UTC)")
     scheduler.add_job(
@@ -143,6 +158,16 @@ async def claims_trigger_scheduled():
         
     except Exception as e:
         logger.error(f"[SCHEDULER JOB ERROR] Claims Trigger failed: {str(e)}", exc_info=True)
+
+
+async def settlement_job_scheduled():
+    """Wrapper for the 11:55 PM Daily Settlement job."""
+    try:
+        logger.info("[SCHEDULER JOB] Daily Settlement starting...")
+        await run_daily_settlement()
+        logger.info("[SCHEDULER JOB] Daily Settlement completed")
+    except Exception as e:
+        logger.error(f"[SCHEDULER JOB ERROR] Daily Settlement failed: {str(e)}", exc_info=True)
 
 
 async def rss_parser_scheduled():

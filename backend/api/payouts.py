@@ -173,14 +173,13 @@ def _get_worker(worker_id: str) -> dict | None:
         from utils.supabase_client import get_supabase
         sb = get_supabase()
         if sb:
-            res = sb.table("workers").select(
-                "id,plan,shift,gig_score"
-            ).eq("id", worker_id).limit(1).execute()
+            # Use * for resilience against schema drift
+            res = sb.table("workers").select("*").eq("id", worker_id).limit(1).execute()
             if res.data:
                 row = res.data[0]
                 # Map plan tier to coverage pct and build response shape
                 plan_map = {"basic": ("Basic", 0.4), "plus": ("Plus", 0.5), "pro": ("Pro", 0.7)}
-                plan_key = row.get("plan", "basic").lower()
+                plan_key = str(row.get("plan") or "basic").lower()
                 plan_label, _ = plan_map.get(plan_key, ("Basic", 0.4))
                 
                 # Dynamically fetch the baseline from the baseline service
