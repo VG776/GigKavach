@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, Outlet, Navigate } from 'react-router-dom';
-import { Shield, LayoutDashboard, User, History, LogOut } from 'lucide-react';
+import { LayoutDashboard, User, History, LogOut } from 'lucide-react';
 
 export const WorkerLayout = () => {
   // Check for worker session in localStorage
