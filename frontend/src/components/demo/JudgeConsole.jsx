@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Play, CheckCircle2, AlertCircle, Loader2, ChevronRight, Info } from 'lucide-react';
+import { API_CONFIG } from '../../utils/constants';
 
 const FACTORS = [
   { id: 'rainfall', label: 'Rainfall Disruption', icon: '🌧️', description: 'Simulates heavy monsoon flooding (>80mm/h)' },
@@ -14,10 +15,35 @@ export const JudgeConsole = () => {
   const [isRunning, setIsRunning] = useState(false);
   const [currentStep, setCurrentStep] = useState(-1);
   const [logs, setLogs] = useState([]);
+  const [judgePhone, setJudgePhone] = useState(localStorage.getItem('judgePhone') || '');
+  const [showPhoneInput, setShowPhoneInput] = useState(!localStorage.getItem('judgePhone'));
 
   const runSequence = async () => {
+    if (!judgePhone) {
+      alert('Please enter your phone number to receive WhatsApp updates!');
+      setShowPhoneInput(true);
+      return;
+    }
+
+    // Save phone number
+    localStorage.setItem('judgePhone', judgePhone);
+    setShowPhoneInput(false);
     setIsRunning(true);
     setLogs([]);
+    
+    // Send start notification
+    try {
+      await fetch(`${API_CONFIG.BASE_URL}/api/v1/demo/notify-whatsapp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          phoneNumber: judgePhone,
+          messageType: 'start'
+        })
+      });
+    } catch (err) {
+      console.warn('[WhatsApp] Start notification failed:', err);
+    }
     
     for (let i = 0; i < FACTORS.length; i++) {
         setCurrentStep(i);
@@ -26,14 +52,32 @@ export const JudgeConsole = () => {
         setLogs(prev => [`🚀 Triggering ${factor.label}...`, ...prev]);
         
         try {
-            const response = await fetch('/api/v1/demo/trigger-disruption', {
+            const response = await fetch(`${API_CONFIG.BASE_URL}/api/v1/demo/trigger-disruption`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ factor: factor.id, score: 85 })
             });
             
             if (response.ok) {
+                const result = await response.json();
                 setLogs(prev => [`✅ Payout triggered for ${factor.id.toUpperCase()}`, ...prev]);
+                
+                // Send per-factor WhatsApp notification
+                try {
+                  await fetch(`${API_CONFIG.BASE_URL}/api/v1/demo/notify-whatsapp`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                      phoneNumber: judgePhone,
+                      messageType: 'factor',
+                      factor: factor.id,
+                      dci: result.weighted_dci,
+                      severity: result.severity
+                    })
+                  });
+                } catch (err) {
+                  console.warn('[WhatsApp] Factor notification failed:', err);
+                }
             } else {
                 setLogs(prev => [`❌ Failed to trigger ${factor.id}`, ...prev]);
             }
@@ -48,6 +92,20 @@ export const JudgeConsole = () => {
     setCurrentStep(-1);
     setIsRunning(false);
     setLogs(prev => [`🏁 Demo Sequence Completed!`, ...prev]);
+    
+    // Send final summary WhatsApp notification
+    try {
+      await fetch(`${API_CONFIG.BASE_URL}/api/v1/demo/notify-whatsapp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          phoneNumber: judgePhone,
+          messageType: 'summary'
+        })
+      });
+    } catch (err) {
+      console.warn('[WhatsApp] Summary notification failed:', err);
+    }
   };
 
   if (!isOpen) {
@@ -112,6 +170,33 @@ export const JudgeConsole = () => {
             </div>
           ))}
         </div>
+
+        {/* Phone Input for WhatsApp */}
+        {showPhoneInput && (
+          <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800 space-y-2">
+            <p className="text-xs font-bold text-blue-900 dark:text-blue-200">📱 WhatsApp Phone Number</p>
+            <div className="flex gap-2">
+              <input
+                type="tel"
+                placeholder="+91 98765 43210"
+                value={judgePhone}
+                onChange={(e) => setJudgePhone(e.target.value)}
+                className="flex-1 px-2 py-1 rounded text-sm border border-blue-300 dark:bg-gray-700 dark:text-white"
+              />
+              <button
+                onClick={() => {
+                  if (judgePhone.trim()) {
+                    localStorage.setItem('judgePhone', judgePhone);
+                    setShowPhoneInput(false);
+                  }
+                }}
+                className="px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Action */}
         <button
