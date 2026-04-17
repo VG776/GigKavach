@@ -39,7 +39,7 @@ def generate_share_token(worker_id: str, expires_in_days: int = 7, max_uses: Opt
         if not result.data:
             raise Exception("Failed to store share token in database")
             
-        frontend_url = settings.FRONTEND_URL or "https://gig-kavach-beryl.vercel.app"
+        frontend_url = settings.get_public_frontend_url()
         share_url = f"{frontend_url}/link/{token}/profile"
         
         return {
@@ -52,7 +52,7 @@ def generate_share_token(worker_id: str, expires_in_days: int = 7, max_uses: Opt
     except Exception as e:
         logger.error(f"[SHARE_TOKEN_SERVICE] Error generating token: {str(e)}")
         # Provide a fallback mock token if DB fails so the bot flow doesn't break
-        frontend_url = settings.FRONTEND_URL or "https://gig-kavach-beryl.vercel.app"
+        frontend_url = settings.get_public_frontend_url()
         fallback_token = f"fallback_{secrets.token_urlsafe(8)}"
         return {
             "share_token": fallback_token,
