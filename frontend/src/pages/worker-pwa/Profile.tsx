@@ -185,9 +185,6 @@ export function WorkerProfile() {
             <PremiumQuote
               workerId={profile.id}
               selectedPlan={selectedPlan}
-              onPlanChange={(plan: string) => {
-                setSelectedPlan(plan);
-              }}
             />
           )}
         </div>
