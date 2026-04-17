@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { ArrowLeft, AlertTriangle, Zap, Cloud, Wind, TrendingUp, Loader2, Play, Square, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, Zap, Cloud, TrendingUp, Loader2, Play, Square, ShieldCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { dciAPI } from '../../api/dci';
 import { workerAPI } from '../../api/workers';
@@ -11,11 +11,11 @@ import { telemetryAPI } from '../../api/telemetry';
  */
 export function WorkerStatus() {
   const navigate = useNavigate();
-  const [dciData, setDciData] = useState(null);
+  const [dciData, setDciData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [isOnShift, setIsOnShift] = useState(localStorage.getItem('isOnShift') === 'true');
-  const watchId = useRef(null);
+  const watchId = useRef<number | null>(null);
 
   const workerId = localStorage.getItem('workerId') || 'f47ac10b-58cc-4372-a567-0e02b2c3d479';
 
@@ -92,7 +92,7 @@ export function WorkerStatus() {
     }
   };
 
-  const getSeverityColor = (severity) => {
+  const getSeverityColor = (severity: string | undefined) => {
     switch (severity?.toLowerCase()) {
       case 'critical':
       case 'catastrophic':
@@ -244,8 +244,8 @@ export function WorkerStatus() {
               </h3>
 
               <div className="space-y-4">
-                {dciData.components && Object.entries(dciData.components).map(([key, value]) => {
-                  const percentage = Math.min(Math.round((value / 100) * 100), 100);
+                {dciData.components && Object.entries(dciData.components).map(([key, value]: [string, any]) => {
+                  const percentage = Math.min(Math.round(((value as number) / 100) * 100), 100);
                   const isHigh = percentage > 70;
                   
                   return (
@@ -283,7 +283,7 @@ export function WorkerStatus() {
                 </p>
 
                 <div className="grid grid-cols-2 gap-3">
-                  {Object.entries(dciData.city_weights).map(([key, weight]) => (
+                  {Object.entries(dciData.city_weights).map(([key, weight]: [string, any]) => (
                     <div
                       key={key}
                       className="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg border border-gray-200 dark:border-gray-600"
