@@ -40,8 +40,8 @@ async def generate_share_token(worker_id: str, expires_in_days: int = 7, max_use
         if not result.data:
             raise Exception("Failed to store share token in database")
             
-        worker_pwa_url = settings.WORKER_PWA_URL or settings.WORKER_PWA_LOCAL_URL or "http://localhost:4173"
-        share_url = f"{worker_pwa_url}/share/worker/{token}"
+        frontend_url = settings.get_public_frontend_url()
+        share_url = f"{frontend_url}/link/{token}/profile"
         
         return {
             "share_token": token,
@@ -54,7 +54,7 @@ async def generate_share_token(worker_id: str, expires_in_days: int = 7, max_use
     except Exception as e:
         logger.error(f"[SHARE_TOKEN_SERVICE] Error generating token: {str(e)}")
         # Provide a fallback mock token if DB fails so the bot flow doesn't break
-        worker_pwa_url = settings.WORKER_PWA_URL or settings.WORKER_PWA_LOCAL_URL or "http://localhost:4173"
+        frontend_url = settings.get_public_frontend_url()
         fallback_token = f"fallback_{secrets.token_urlsafe(8)}"
         fallback_expires = datetime.now(timezone.utc) + timedelta(days=1)
         return {
