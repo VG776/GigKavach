@@ -211,3 +211,5 @@ export function WorkerProfile() {
     </div>
   );
 }
+
+export default WorkerProfile;

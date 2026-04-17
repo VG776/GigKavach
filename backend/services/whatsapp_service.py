@@ -237,8 +237,14 @@ def send_whatsapp(to_number: str, message: str) -> str | None:
     Returns message ID on success, None on failure.
     """
     try:
-        # Clean phone number - remove + if present
-        clean_phone = to_number.lstrip("+")
+        # Clean phone number - remove + and spaces if present
+        clean_phone = to_number.replace(" ", "").replace("-", "").lstrip("+")
+        
+        # If no country code, assume India (+91)
+        if len(clean_phone) == 10:
+            clean_phone = f"91{clean_phone}"
+        elif len(clean_phone) == 11 and clean_phone.startswith("0"):
+            clean_phone = f"91{clean_phone[1:]}"
         
         bot_api_url = get_bot_api_url()
         
@@ -329,7 +335,16 @@ def notify_worker(
 async def send_whatsapp_message(phone_number: str, message: str) -> bool:
     """Async version of send_whatsapp for use in FastAPI routes and webhooks."""
     try:
-        clean_phone = phone_number.lstrip("+")
+        # Format phone number properly
+        clean_phone = phone_number.replace(" ", "").replace("-", "")
+        clean_phone = clean_phone.lstrip("+")
+        
+        # If no country code, assume India (+91)
+        if len(clean_phone) == 10:
+            clean_phone = f"91{clean_phone}"
+        elif len(clean_phone) == 11 and clean_phone.startswith("0"):
+            clean_phone = f"91{clean_phone[1:]}"
+        
         bot_api_url = get_bot_api_url()
         
         payload = {
@@ -375,3 +390,84 @@ async def send_settlement_alert(worker_id: str, amount: float, upi_id: str, ref:
         upi=upi_id,
         ref=ref
     )
+
+
+# ─── Judge Demo Mode (Option 1: Real-time Updates) ──────────────────────────
+
+DEMO_MESSAGES = {
+    "start": {
+        "en": "🚀 Judge Demo Initiated\n━━━━━━━━━━━━━━━━━━━━━━\n✅ Admin triggered 5-Factor Test Sequence\n🧑 Test Worker: #49766\n⏰ Time: {timestamp}\n\n📍 Starting in 3... 2... 1...",
+    },
+    "factor_rainfall": {
+        "en": "✅ RAINFALL DISRUPTION TRIGGERED\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n🌧️ DCI Score: {dci} (>65 threshold)\n💰 Payout Amount: ₹{payout}\n📊 Status: PROCESSED\n\n⏳ Next factor in 3 seconds...",
+    },
+    "factor_aqi": {
+        "en": "✅ AQI HEALTH HAZARD TRIGGERED\n━━━━━━━━━━━━━━━━━━━━━━━━━\n🌫️ DCI Score: {dci} (>65 threshold)\n💰 Payout Amount: ₹{payout}\n📊 Status: PROCESSED\n\n⏳ Next factor in 3 seconds...",
+    },
+    "factor_heat": {
+        "en": "✅ EXTREME HEATWAVE TRIGGERED\n━━━━━━━━━━━━━━━━━━━━━━━━\n🔥 DCI Score: {dci} (>65 threshold)\n💰 Payout Amount: ₹{payout}\n📊 Status: PROCESSED\n\n⏳ Next factor in 3 seconds...",
+    },
+    "factor_social": {
+        "en": "✅ SOCIAL DISRUPTION TRIGGERED\n━━━━━━━━━━━━━━━━━━━━━━━━━━\n📢 DCI Score: {dci} (>65 threshold)\n💰 Payout Amount: ₹{payout}\n📊 Status: PROCESSED\n\n⏳ Next factor in 3 seconds...",
+    },
+    "factor_platform": {
+        "en": "✅ PLATFORM SURGE TRIGGERED\n━━━━━━━━━━━━━━━━━━━━━━━━\n📦 DCI Score: {dci} (>65 threshold)\n💰 Payout Amount: ₹{payout}\n📊 Status: PROCESSED\n\n✨ All factors tested successfully!",
+    },
+    "summary": {
+        "en": "🏁 5-FACTOR TEST COMPLETE\n━━━━━━━━━━━━━━━━━━━━━━\n✅ All 5 disruptions triggered successfully\n\n💰 PAYOUTS SUMMARY:\n• 🌧️ Rainfall: ₹500\n• 🌫️ AQI: ₹500\n• 🔥 Heat: ₹500\n• 📢 Social: ₹500\n• 📦 Platform: ₹500\n\n💵 Total Payouts: ₹2,500\n📊 View Dashboard: {dashboard_link}\n\n✨ Demo sequence completed successfully!",
+    }
+}
+
+
+async def send_demo_message(
+    judge_phone: str,
+    message_type: str,
+    factor: str = None,
+    dci: float = None,
+    payout: float = None,
+    dashboard_link: str = "http://localhost:3000/dashboard"
+) -> bool:
+    """
+    Send Judge Console demo messages via WhatsApp.
+    Supports: start, factor_*, summary
+    
+    Args:
+        judge_phone: Judge's phone number
+        message_type: Type of message (start, factor_rainfall, etc., summary)
+        factor: Factor name (rainfall, aqi, heat, social, platform)
+        dci: DCI score for the factor
+        payout: Payout amount for the factor
+        dashboard_link: Link to dashboard for summary
+    
+    Returns:
+        True if sent successfully, False otherwise
+    """
+    try:
+        # Get template
+        if message_type == "factor" and factor:
+            template_key = f"factor_{factor}"
+        else:
+            template_key = message_type
+        
+        if template_key not in DEMO_MESSAGES:
+            logger.warning(f"Demo message template '{template_key}' not found")
+            return False
+        
+        template = DEMO_MESSAGES[template_key]["en"]
+        
+        # Format message
+        from datetime import datetime
+        message = template.format(
+            timestamp=datetime.now().strftime("%Y-%m-%d %H:%M UTC"),
+            dci=int(dci) if dci else 0,
+            payout=int(payout) if payout else 500,
+            dashboard_link=dashboard_link
+        )
+        
+        # Send via bot API
+        return await send_whatsapp_message(judge_phone, message)
+        
+    except Exception as e:
+        logger.error(f"Error sending demo message to {judge_phone}: {e}")
+        return False
+
