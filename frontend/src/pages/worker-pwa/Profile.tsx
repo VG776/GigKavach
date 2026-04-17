@@ -2,8 +2,6 @@ import { useEffect, useState } from 'react';
 import { ArrowLeft, User, MapPin, DollarSign, Zap, TrendingUp, AlertCircle, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { workerAPI } from '../../api/workers';
-import { premiumAPI } from '../../api/premium';
-import { formatCurrency } from '../../utils/formatters';
 import { PremiumQuote } from '../../components/premium/PremiumQuote';
 
 /**
@@ -12,9 +10,9 @@ import { PremiumQuote } from '../../components/premium/PremiumQuote';
  */
 export function WorkerProfile() {
   const navigate = useNavigate();
-  const [profile, setProfile] = useState(null);
+  const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedPlan, setSelectedPlan] = useState('basic');
+  const [selectedPlan, setSelectedPlan] = useState<string>('basic');
 
   // Fetch worker profile
   useEffect(() => {
@@ -187,7 +185,7 @@ export function WorkerProfile() {
             <PremiumQuote
               workerId={profile.id}
               selectedPlan={selectedPlan}
-              onPlanChange={setSelectedPlan}
+              onPlanChange={(plan: string) => setSelectedPlan(plan)}
             />
           )}
         </div>
