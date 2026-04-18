@@ -185,6 +185,9 @@ client.on('ready', () => {
  */
 client.on('message', async (msg) => {
   try {
+    // Ignore messages sent by the bot itself to avoid reply loops.
+    if (msg.fromMe) return;
+
     // Ignore group messages and status broadcasts
     if (msg.from.endsWith('@g.us') || msg.from === 'status@broadcast') return;
 
@@ -211,9 +214,17 @@ client.on('message', async (msg) => {
         log.error(`Backend webhook failed: ${response.status}`);
       } else {
         const data = await response.json().catch(() => ({}));
-        if (data?.reply) {
-          await msg.reply(data.reply);
+        const replyText = typeof data?.reply === 'string' ? data.reply.trim() : '';
+
+        if (replyText) {
+          await msg.reply(replyText);
           log.debug(`Replied directly to ${phone}`);
+        } else if (data?.detail || data?.message || data?.status === 'error') {
+          const fallbackText = data.detail || data.message || `Backend webhook failed (${response.status})`;
+          await msg.reply(`⚠️ ${fallbackText}`);
+        } else {
+          log.warn(`Backend responded without a reply for ${phone}`);
+          await msg.reply('✅ Message received. We are processing it now.');
         }
       }
     } catch (backendError) {
