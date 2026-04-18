@@ -81,6 +81,30 @@ MESSAGES: dict[str, dict[str, str]] = {
         "te": "మీరు డెలివరీ చేసే ప్రాంతాల పిన్ కోడ్‌లు పంపండి (5 వరకు):\nఉదా: 560047, 560034",
     },
 
+    "ask_deliveries": {
+        "en": "Reply with just the number of deliveries completed.",
+        "kn": "ಪೂರ್ಣಗೊಂಡ ಡೆಲಿವರಿ ಸಂಖ್ಯೆಯನ್ನು ಮಾತ್ರ ಕಳುಹಿಸಿ.",
+        "hi": "केवल डिलीवरी की संख्या भेजें।",
+        "ta": "முடித்த டெலிவரி எண்ணிக்கையை மட்டும் அனுப்பவும்.",
+        "te": "పూర్తి చేసిన డెలివరీల సంఖ్యను మాత్రమే పంపండి.",
+    },
+
+    "portfolio_confirmation": {
+        "en": "📦 Based on {score} deliveries, your portfolio score is {score}/100.",
+        "kn": "📦 {score} ಡೆಲಿವರಿಗಳ ಆಧಾರದ ಮೇಲೆ ನಿಮ್ಮ ಪೋರ್ಟ್‌ಫೋಲಿಯೋ ಸ್ಕೋರ್ {score}/100 ಆಗಿದೆ.",
+        "hi": "📦 {score} डिलीवरी के आधार पर आपका पोर्टफोलियो स्कोर {score}/100 है।",
+        "ta": "📦 {score} டெலிவரிகளின் அடிப்படையில் உங்கள் போர்ட்ஃபோலியோ மதிப்பெண் {score}/100.",
+        "te": "📦 {score} డెలివరీల ఆధారంగా మీ పోర్ట్‌ఫోలియో స్కోర్ {score}/100.",
+    },
+
+    "recommended_for_you": {
+        "en": "🤖 Recommended for you: *{plan}*",
+        "kn": "🤖 ನಿಮಗಾಗಿ ಶಿಫಾರಸು: *{plan}*",
+        "hi": "🤖 आपके लिए सुझाव: *{plan}*",
+        "ta": "🤖 உங்களுக்கு பரிந்துரை: *{plan}*",
+        "te": "🤖 మీ కోసం సిఫార్సు: *{plan}*",
+    },
+
     "ask_plan": {
         "en": "Choose your weekly coverage plan:\n\n1️⃣ Shield Basic — ₹69/week — 40% daily earnings protected\n2️⃣ Shield Plus — ₹89/week — 50% daily earnings protected\n3️⃣ Shield Pro — ₹99/week — 70% daily earnings protected",
         "kn": "ನಿಮ್ಮ ವಾರದ ಯೋಜನೆ ಆಯ್ಕೆ ಮಾಡಿ:\n\n1️⃣ Shield Basic — ₹69/ವಾರ — 40% ದಿನದ ಸಂಪಾದನೆ ರಕ್ಷಣೆ\n2️⃣ Shield Plus — ₹89/ವಾರ — 50% ರಕ್ಷಣೆ\n3️⃣ Shield Pro — ₹99/ವಾರ — 70% ರಕ್ಷಣೆ",
@@ -115,6 +139,14 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
 
     "shift_stopped": {
+        "en": "⏹️ *Shift Ended!* Duration: {duration}. Monitoring paused. Great work today! 🛡️ (+0.5 trust boost)",
+        "kn": "⏹️ *ಶಿಫ್ಟ್ ಕೊನೆಗೊಂಡಿತು!* ಕಾಲಾವಧಿ: {duration}. ಮೇಲ್ವಿಚಾರಣೆ ನಿಲ್ಲಿಸಲಾಗಿದೆ. 🛡️",
+        "hi": "⏹️ *शिफ्ट खत्म!* समय: {duration}। मॉनिटरिंग बंद। अच्छा काम किया! 🛡️",
+        "ta": "⏹️ *ஷிஃப்ட் முடிந்தது!* நேரம்: {duration}. கண்காணிப்பு நிறுத்தப்பட்டது. 🛡️",
+        "te": "⏹️ *షిఫ్ట్ పూర్తయింది!* సమయం: {duration}. మానిటరింగ్ ఆపబడింది. 🛡️",
+    },
+
+    "shift_ended": {
         "en": "⏹️ *Shift Ended!* Duration: {duration}. Monitoring paused. Great work today! 🛡️ (+0.5 trust boost)",
         "kn": "⏹️ *ಶಿಫ್ಟ್ ಕೊನೆಗೊಂಡಿತು!* ಕಾಲಾವಧಿ: {duration}. ಮೇಲ್ವಿಚಾರಣೆ ನಿಲ್ಲಿಸಲಾಗಿದೆ. 🛡️",
         "hi": "⏹️ *शिफ्ट खत्म!* समय: {duration}। मॉनिटरिंग बंद। अच्छा काम किया! 🛡️",
@@ -192,6 +224,14 @@ MESSAGES: dict[str, dict[str, str]] = {
         "hi": "GigKavach कमांड:\n• STATUS — जोन DCI और कवरेज\n• START — शिफ्ट शुरू करें\n• STOP — शिफ्ट बंद करें\n• UPI — पेमेंट आईडी अपडेट करें\n• HELP — मेनू देखें",
         "ta": "GigKavach கட்டளைகள்:\n• STATUS — மண்டல DCI & அட்டை\n• START — ஷிஃப்ட் தொடங்க\n• STOP — ஷிஃப்ட் நிறுத்த\n• HELP — மெனு பார்க்க",
         "te": "GigKavach కమాండ్లు:\n• STATUS — జోన్ DCI & కవరేజ్\n• START — షిఫ్ట్ ప్రారంభం\n• STOP — షిఫ్ట్ ముగింపు\n• HELP — మెనూ చూడండి",
+    },
+
+    "unknown_command": {
+        "en": "❌ Unknown command. Type HELP for available commands.",
+        "kn": "❌ ಅಪರಿಚಿತ ಆದೇಶ. ಲಭ್ಯವಿರುವ ಆದೇಶಗಳಿಗಾಗಿ HELP ಟೈಪ್ ಮಾಡಿ.",
+        "hi": "❌ अज्ञात कमांड। उपलब्ध कमांड के लिए HELP लिखें।",
+        "ta": "❌ தெரியாத கட்டளை. கிடைக்கும் கட்டளைகளுக்காக HELP தட்டச்சு செய்யவும்.",
+        "te": "❌ తెలియని కమాండ్. అందుబాటులో ఉన్న కమాండ్ల కోసం HELP టైప్ చేయండి.",
     },
 }
 

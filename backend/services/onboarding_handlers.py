@@ -66,6 +66,122 @@ def normalize_phone(phone: str) -> str:
     return phone
 
 
+def _phone_lookup_variants(phone: str) -> set[str]:
+    digits = "".join(ch for ch in (phone or "") if ch.isdigit())
+    variants = {phone.strip() if phone else "", digits}
+    if len(digits) == 10:
+        variants.add(f"+91{digits}")
+        variants.add(f"91{digits}")
+    elif len(digits) > 10 and not digits.startswith("+"):
+        variants.add(f"+{digits}")
+    variants.discard("")
+    return variants
+
+
+async def get_worker_by_phone(phone: str) -> Optional[dict]:
+    """Fetch a worker record by WhatsApp phone number."""
+    try:
+        sb = get_supabase()
+        for candidate in _phone_lookup_variants(phone) | _phone_lookup_variants(normalize_phone(phone)):
+            result = sb.table("workers").select("*").eq("phone", candidate).execute()
+            if result.data:
+                return result.data[0]
+
+            result = sb.table("workers").select("*").eq("phone_number", candidate).execute()
+            if result.data:
+                return result.data[0]
+
+        return None
+    except Exception as e:
+        logger.error(f"Error fetching worker by phone {phone}: {e}")
+        return None
+
+
+async def get_or_create_worker_share_url(worker_id: str, reason: str) -> str:
+    """Create a short-lived worker share URL for WhatsApp session login."""
+    token_data = await generate_share_token(worker_id, expires_in_days=7, max_uses=200, reason=reason)
+    return token_data.get("share_url", "")
+
+
+def format_session_login_prompt(share_url: str) -> str:
+    """Return a WhatsApp-safe login prompt for session verification."""
+    return (
+        "🔐 *Session verification required*\n\n"
+        f"Open this link to continue:\n{share_url}\n\n"
+        "After opening it, send *START* again."
+    )
+
+
+async def is_whatsapp_session_active(phone: str) -> bool:
+    """Check whether a worker has an active WhatsApp session token."""
+    try:
+        rc = await get_redis()
+        worker = await get_worker_by_phone(phone)
+
+        candidates = set()
+        candidates.update({f"wa_session:{value}" for value in _phone_lookup_variants(phone)})
+        candidates.update({f"wa_session:{value}" for value in _phone_lookup_variants(normalize_phone(phone))})
+
+        if worker:
+            candidates.update({
+                f"wa_session:{worker.get('phone', '')}",
+                f"wa_session:{worker.get('phone_number', '')}",
+            })
+
+        for key in candidates:
+            if key and await rc.get(key):
+                return True
+
+        return False
+    except Exception as e:
+        logger.error(f"Error checking session state for {phone}: {e}")
+        return False
+
+
+def normalize_shift_for_storage(shift: str) -> str:
+    return (shift or "flexible").strip().lower()
+
+
+def parse_gig_score(message: str) -> Optional[float]:
+    try:
+        raw = (message or "").strip().replace(" ", "")
+        if not raw:
+            return None
+        if "/" in raw:
+            score_text, denom_text = raw.split("/", 1)
+            numerator = float(score_text)
+            denominator = float(denom_text) if denom_text else 5.0
+            if denominator <= 0:
+                return None
+            return max(0.0, min(100.0, (numerator / denominator) * 100.0))
+
+        score = float(raw)
+        if score <= 5:
+            return max(0.0, min(100.0, (score / 5.0) * 100.0))
+        return max(0.0, min(100.0, score))
+    except Exception:
+        return None
+
+
+def deliveries_to_portfolio_score(deliveries: int) -> float:
+    if deliveries <= 0:
+        return 20.0
+    if deliveries < 100:
+        return 30.0 + (deliveries / 100.0) * 20.0
+    if deliveries < 500:
+        return 50.0 + ((deliveries - 100) / 400.0) * 25.0
+    return min(100.0, 75.0 + ((deliveries - 500) / 1000.0) * 25.0)
+
+
+def recommend_plan(gig_score: float, portfolio_score: float) -> str:
+    average_score = (gig_score + portfolio_score) / 2.0
+    if average_score >= 80:
+        return "pro"
+    if average_score >= 60:
+        return "plus"
+    return "basic"
+
+
 # ─── Redis Helpers ────────────────────────────────────────────────────────────
 
 async def get_onboarding_state(phone: str) -> Optional[dict]:
@@ -109,11 +225,12 @@ async def clear_onboarding_state(phone: str) -> bool:
 async def _generate_dashboard_url(phone: str) -> str:
     """Helper to generate a secure, tokenized dashboard URL for a worker."""
     try:
-        sb = get_supabase()
-        result = sb.table("workers").select("id").eq("phone", phone).execute()
-        if not result.data: return "{FRONTEND_URL}/status"
-        
-        worker_id = result.data[0]["id"]
+        worker = await get_worker_by_phone(phone)
+        if not worker:
+            from config.settings import settings
+            return f"{settings.FRONTEND_URL}/status"
+
+        worker_id = worker["id"]
         token_data = await generate_share_token(worker_id, expires_in_days=7, reason="Onboarding Summary")
         return token_data["share_url"]
     except Exception as e:
@@ -130,7 +247,7 @@ async def handle_join(phone: str, message: str) -> str:
     # Check if already onboarded
     existing_worker = await get_worker_by_phone(phone)
     if existing_worker:
-        share_url = get_or_create_worker_share_url(existing_worker["id"], "WhatsApp JOIN session login")
+        share_url = await get_or_create_worker_share_url(existing_worker["id"], "WhatsApp JOIN session login")
         return format_session_login_prompt(share_url)
     
     # Initialize onboarding state
@@ -245,8 +362,12 @@ async def handle_portfolio_score_entry(phone: str, message: str, state: dict) ->
     state["step"] = 5
     await set_onboarding_state(phone, state)
 
+    suggested_plan = recommend_plan(float(state.get("gig_score", 50)), portfolio_score)
+    suggested_plan_name = "Shield Pro" if suggested_plan == "pro" else "Shield Plus" if suggested_plan == "plus" else "Shield Basic"
+
     return (
         f"{MESSAGES['portfolio_confirmation'][lang].format(score=int(portfolio_score))}\n"
+        f"{MESSAGES['recommended_for_you'][lang].format(plan=suggested_plan_name)}\n"
         f"{MESSAGES['ask_verification'][lang]}"
     )
 
@@ -405,7 +526,7 @@ async def handle_plan_selection(phone: str, message: str, state: dict) -> str:
         
         sb.table("policies").insert(policy_data).execute()
         
-        token_data = generate_share_token(
+        token_data = await generate_share_token(
             worker_id,
             expires_in_days=7,
             max_uses=200,
@@ -447,11 +568,9 @@ async def handle_upi_update(phone: str, message: str) -> str:
     """
     try:
         sb = get_supabase()
-        worker_response = sb.table("workers").select("*").eq("phone", phone).execute()
-        if not worker_response.data:
+        worker = await get_worker_by_phone(phone)
+        if not worker:
             return "❌ Not registered yet. Reply with JOIN to start."
-            
-        worker = worker_response.data[0]
         lang = worker.get("language", "en")
         
         # Parse UPI ID from message
@@ -494,19 +613,19 @@ async def handle_start(phone: str, message: str) -> str:
         # Update status in Redis
         from utils.redis_client import get_redis
         rc = await get_redis()
-        await rc.set(f"shift_status:{phone}", "on", ex=86400) # 24h expiry
+        await rc.set(f"shift_status:{worker['id']}", "on", ex=86400) # 24h expiry
         
         # Also update last_seen_at and is_on_shift in DB if column exists
         now = datetime.now()
         update_data = {"last_seen_at": now.isoformat(), "is_on_shift": True}
         try:
-            sb.table("workers").update(update_data).eq("phone_number", phone).execute()
+            sb.table("workers").update(update_data).eq("id", worker["id"]).execute()
         except:
             # Fallback for older schemas
-            sb.table("workers").update({"last_seen_at": now.isoformat()}).eq("phone_number", phone).execute()
+            sb.table("workers").update({"last_seen_at": now.isoformat()}).eq("id", worker["id"]).execute()
 
         # Generate login prompt as requested (ss message)
-        share_url = get_or_create_worker_share_url(worker["id"], "WhatsApp START shift login")
+        share_url = await get_or_create_worker_share_url(worker["id"], "WhatsApp START shift login")
         return format_session_login_prompt(share_url)
 
     except Exception as e:
@@ -527,16 +646,16 @@ async def handle_stop(phone: str, message: str) -> str:
         # Update status in Redis
         from utils.redis_client import get_redis
         rc = await get_redis()
-        await rc.delete(f"shift_status:{phone}")
+        await rc.delete(f"shift_status:{worker['id']}")
 
         # Update DB if column exists
         try:
-            sb.table("workers").update({"is_on_shift": False}).eq("phone_number", phone).execute()
-        except: pass
+            sb.table("workers").update({"is_on_shift": False}).eq("id", worker["id"]).execute()
+        except Exception:
+            pass
 
         lang = worker.get("language", "en")
-        from .whatsapp_service import MESSAGES
-        return MESSAGES["shift_ended"].get(lang, MESSAGES["shift_ended"]["en"])
+        return MESSAGES["shift_stopped"].get(lang, MESSAGES["shift_stopped"]["en"])
 
     except Exception as e:
         logger.error(f"Error in STOP for {phone}: {e}")
@@ -552,8 +671,6 @@ async def handle_status(phone: str, body: str) -> str:
         worker = await get_worker_by_phone(phone)
         if not worker:
             return "❌ Not registered yet. Reply with JOIN to start."
-        
-        worker = worker_response.data[0]
         
         # Get active policy
         policy_response = (
@@ -852,7 +969,7 @@ async def handle_history(phone: str, message: str) -> str:
         wid = worker["id"]
         lang = worker.get("language", "en")
         
-        token_data = generate_share_token(wid, expires_in_days=7, max_uses=50, reason="WhatsApp HISTORY command")
+        token_data = await generate_share_token(wid, expires_in_days=7, max_uses=50, reason="WhatsApp HISTORY command")
         
         share_url = token_data.get("share_url")
         
@@ -873,12 +990,10 @@ async def handle_start_shift(phone: str, message: str) -> str:
     """
     try:
         sb = get_supabase()
-        worker_response = sb.table("workers").select("id, language, is_active").eq("phone", phone).execute()
-        
-        if not worker_response.data:
+        worker = await get_worker_by_phone(phone)
+
+        if not worker:
             return "❌ Not registered yet. Reply with JOIN to start."
-            
-        worker = worker_response.data[0]
         if not worker.get("is_active"):
             return "⚠️ Your account is suspended. Please use APPEAL to contest."
             
@@ -886,7 +1001,7 @@ async def handle_start_shift(phone: str, message: str) -> str:
         lang = worker.get("language", "en")
         
         # 1. Update Supabase status
-        sb.table("workers").update({"is_working": True, "last_seen_at": datetime.now().isoformat()}).eq("id", worker_id).execute()
+        sb.table("workers").update({"is_on_shift": True, "last_seen_at": datetime.now().isoformat()}).eq("id", worker_id).execute()
         
         # 2. Persist start time in Redis for duration calculation and telemetry gating
         rc = await get_redis()
@@ -914,21 +1029,19 @@ async def handle_stop_shift(phone: str, message: str) -> str:
     """
     try:
         sb = get_supabase()
-        worker_response = sb.table("workers").select("id, language").eq("phone", phone).execute()
-        
-        if not worker_response.data:
+        worker = await get_worker_by_phone(phone)
+
+        if not worker:
             return "❌ Not registered."
-            
-        worker = worker_response.data[0]
         worker_id = worker["id"]
         lang = worker.get("language", "en")
         
         # 1. Update Supabase
-        sb.table("workers").update({"is_working": False, "last_seen_at": datetime.now().isoformat()}).eq("id", worker_id).execute()
+        sb.table("workers").update({"is_on_shift": False, "last_seen_at": datetime.now().isoformat()}).eq("id", worker_id).execute()
         
         # 2. Calculate duration from Redis
         rc = await get_redis()
-        shift_key = f"shift_active:{phone}"
+        shift_key = f"shift_active:{worker_id}"
         start_time_str = await rc.get(shift_key)
         
         duration_str = "Unknown"
@@ -940,7 +1053,6 @@ async def handle_stop_shift(phone: str, message: str) -> str:
             duration_str = f"{hours}h {minutes}m"
             
             # Use worker_id for standardized telemetry cleanup
-            shift_key = f"shift_active:{worker_id}"
             await rc.delete(shift_key)
             
             # 3. Award Clean Shift micro-boost (+0.5 trust points)
@@ -969,21 +1081,21 @@ async def route_message(phone: str, body: str) -> str:
     keyword = body.strip().upper().split()[0] if body.strip() else ""
     # If worker is already registered, require a PWA login link at the start of each session.
     worker = await get_worker_by_phone(phone)
-    if worker and keyword in {"LOGIN", "START", "SESSION"}:
-        share_url = get_or_create_worker_share_url(worker["id"], "WhatsApp explicit session login")
+    if worker and keyword in {"LOGIN", "SESSION"}:
+        share_url = await get_or_create_worker_share_url(worker["id"], "WhatsApp explicit session login")
         return format_session_login_prompt(share_url)
 
-    if worker and keyword not in {"HELP", "PROFILE", "HISTORY", "LOGIN", "START", "SESSION", "JOIN"}:
+    if worker and keyword not in {"HELP", "PROFILE", "HISTORY", "LOGIN", "START", "SESSION", "JOIN", "STATUS"}:
         session_active = await is_whatsapp_session_active(phone)
         if not session_active:
-            share_url = get_or_create_worker_share_url(worker["id"], "WhatsApp auto session login")
+            share_url = await get_or_create_worker_share_url(worker["id"], "WhatsApp auto session login")
             return format_session_login_prompt(share_url)
     
     # Global commands
     if keyword == "START":
-        return await handle_start(phone, body)
+        return await handle_start_shift(phone, body)
     elif keyword == "STOP":
-        return await handle_stop(phone, body)
+        return await handle_stop_shift(phone, body)
     elif keyword == "STATUS":
         return await handle_status(phone, body)
     elif keyword == "RENEW":
@@ -1002,10 +1114,6 @@ async def route_message(phone: str, body: str) -> str:
         return await handle_profile(phone, body)
     elif keyword == "HISTORY":
         return await handle_history(phone, body)
-    elif keyword == "START":
-        return await handle_start_shift(phone, body)
-    elif keyword == "STOP":
-        return await handle_stop_shift(phone, body)
     elif keyword == "UPI":
         return await handle_upi_update(phone, body)
     

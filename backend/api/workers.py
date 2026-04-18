@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from config.settings import settings
 from utils.db import get_supabase
+from utils.redis_client import get_redis
 from services.share_tokens_service import generate_share_token
 from models.worker import (
     WorkerCreate, 
@@ -135,7 +136,7 @@ async def update_shift_status(worker_id: str, is_working: bool):
     rc = await get_redis()
     
     # 1. Update Database
-    res = sb.table("workers").update({"is_working": is_working, "last_seen_at": datetime.now().isoformat()}).eq("id", worker_id).execute()
+    res = sb.table("workers").update({"is_on_shift": is_working, "last_seen_at": datetime.now().isoformat()}).eq("id", worker_id).execute()
     if not res.data:
         raise HTTPException(status_code=404, detail="Worker not found")
         
