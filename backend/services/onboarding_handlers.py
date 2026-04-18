@@ -228,7 +228,7 @@ async def _generate_dashboard_url(phone: str) -> str:
         worker = await get_worker_by_phone(phone)
         if not worker:
             from config.settings import settings
-            return f"{settings.FRONTEND_URL}/status"
+            return f"{settings.FRONTEND_URL}/worker/status"
 
         worker_id = worker["id"]
         token_data = await generate_share_token(worker_id, expires_in_days=7, reason="Onboarding Summary")
@@ -236,7 +236,7 @@ async def _generate_dashboard_url(phone: str) -> str:
     except Exception as e:
         logger.error(f"Error generating dashboard URL: {e}")
         from config.settings import settings
-        return f"{settings.FRONTEND_URL}/status"
+        return f"{settings.FRONTEND_URL}/worker/status"
 
 
 async def handle_join(phone: str, message: str) -> str:

@@ -15,7 +15,7 @@ async def generate_share_token(worker_id: str, expires_in_days: int = 7, max_use
         supabase = get_supabase()
         
         # Verify worker exists
-        worker_result = supabase.table("workers").select("id").eq("id", worker_id).execute()
+        worker_result = await supabase.table("workers").select("id").eq("id", worker_id).execute()
         if not worker_result.data:
             raise ValueError(f"Worker {worker_id} not found")
             
@@ -35,7 +35,7 @@ async def generate_share_token(worker_id: str, expires_in_days: int = 7, max_use
             "notes": f"Generated via {reason}"
         }
         
-        result = supabase.table("share_tokens").insert(share_token_data).execute()
+        result = await supabase.table("share_tokens").insert(share_token_data).execute()
         
         if not result.data:
             raise Exception("Failed to store share token in database")
@@ -61,7 +61,7 @@ async def generate_share_token(worker_id: str, expires_in_days: int = 7, max_use
         return {
             "share_token": fallback_token,
             "token": fallback_token,
-            "share_url": f"{worker_pwa_url}/share/worker/{fallback_token}",
+            "share_url": f"https://gig-kavach-beryl.vercel.app/link/{fallback_token}/profile",
             "worker_id": worker_id,
             "expires_at": fallback_expires.isoformat()
         }
