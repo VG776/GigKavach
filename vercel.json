@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "https://gigkavach-backend.onrender.com/api/$1"
+      "destination": "https://gigkavach-q5fq.onrender.com/api/$1"
     },
     {
       "source": "/(.*)",

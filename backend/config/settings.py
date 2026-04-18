@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     
     # ── Frontend URLs (for CORS and shareable links) ──────────────────
     FRONTEND_LOCAL_URL: str = "http://localhost:3000"
-    FRONTEND_PRODUCTION_URL: str = "https://gigkavach-delta.vercel.app"
+    FRONTEND_PRODUCTION_URL: str = "https://gig-kavach-beryl.vercel.app"
     WORKER_PWA_LOCAL_URL: str = "http://localhost:4173"
     WORKER_PWA_URL: str = ""
     

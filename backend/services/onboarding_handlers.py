@@ -1084,12 +1084,6 @@ async def route_message(phone: str, body: str) -> str:
     if worker and keyword in {"LOGIN", "SESSION"}:
         share_url = await get_or_create_worker_share_url(worker["id"], "WhatsApp explicit session login")
         return format_session_login_prompt(share_url)
-
-    if worker and keyword not in {"HELP", "PROFILE", "HISTORY", "LOGIN", "START", "SESSION", "JOIN", "STATUS"}:
-        session_active = await is_whatsapp_session_active(phone)
-        if not session_active:
-            share_url = await get_or_create_worker_share_url(worker["id"], "WhatsApp auto session login")
-            return format_session_login_prompt(share_url)
     
     # Global commands
     if keyword == "START":
