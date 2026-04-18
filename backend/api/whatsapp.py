@@ -28,7 +28,7 @@ class WhatsAppWebhookRequest(BaseModel):
     name: Optional[str] = None
     timestamp: Optional[str] = None
 
-@router.post("/whatsapp/webhook")
+@router.post("/webhook")
 async def whatsapp_inbound_webhook(
     req: WhatsAppWebhookRequest
 ):
